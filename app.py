@@ -54,7 +54,7 @@ class URL(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     url = db.Column(db.String(255), nullable=False)
     is_active = db.Column(db.Boolean, default=True)
-    interval = db.Column(db.Integer, default=60)  # New column for interval in seconds
+    interval = db.Column(db.Integer, default=60)  # Interval in seconds
     last_checked = db.Column(db.DateTime)
     status = db.Column(db.String(20))
     last_screenshot = db.Column(db.String(255))
@@ -74,13 +74,14 @@ def take_screenshot(url):
         driver = webdriver.Chrome(service=service, options=chrome_options)
         driver.set_window_size(1280, 720)
         driver.get(url)
-        time.sleep(2)
+        time.sleep(2)  # Wait for page load
         screenshot_path = get_screenshot_filename(url)
         driver.save_screenshot(screenshot_path)
         driver.quit()
+        print(f"[INFO] Screenshot saved to {screenshot_path}")
         return screenshot_path
     except Exception as e:
-        print(f"[ERROR] Failed to take screenshot for {url}: {e}")
+        print(f"[ERROR] Screenshot failed for {url}: {e}")
         return None
 
 def compare_screenshots(img1_path, img2_path, threshold=0.1):
@@ -124,48 +125,55 @@ def send_telegram(message):
 
 def monitor_websites():
     with app.app_context():
+        last_check = {}
         while True:
             try:
                 urls = URL.query.all()
+                current_time = time.time()
                 for url_obj in urls:
                     if url_obj.is_active:
-                        try:
-                            response = requests.get(url_obj.url, timeout=5)
-                            status = "Up" if response.status_code == 200 else f"Down ({response.status_code})"
-                        except Exception as e:
-                            status = "Down"
-                            print(f"[ERROR] Failed to check {url_obj.url}: {e}")
-                        
-                        new_screenshot = take_screenshot(url_obj.url)
-                        visual_change = False
-                        if new_screenshot and url_obj.last_screenshot and os.path.exists(url_obj.last_screenshot):
-                            visual_change = compare_screenshots(url_obj.last_screenshot, new_screenshot)
-                        
-                        if url_obj.status != status or visual_change:
-                            alert = f"URL: {url_obj.url}\nStatus: {status}"
-                            if visual_change:
-                                alert += "\nVisual change detected!"
-                            send_email("Website Status Alert", alert)
-                            send_telegram(alert)
-                        
-                        url_obj.status = status
-                        url_obj.last_checked = datetime.utcnow()
-                        if new_screenshot:
-                            old_screenshot = url_obj.last_screenshot
-                            url_obj.last_screenshot = new_screenshot
-                            if old_screenshot and os.path.exists(old_screenshot):
-                                try:
-                                    os.remove(old_screenshot)
-                                except Exception as e:
-                                    print(f"[ERROR] Failed to delete old screenshot: {e}")
-                        
-                        try:
-                            db.session.commit()
-                        except Exception as e:
-                            db.session.rollback()
-                            print(f"[ERROR] Database commit failed: {e}")
+                        # Check if enough time has passed since last check
+                        last_check_time = last_check.get(url_obj.id, 0)
+                        if current_time - last_check_time >= url_obj.interval:
+                            try:
+                                response = requests.get(url_obj.url, timeout=5)
+                                status = "Up" if response.status_code == 200 else f"Down ({response.status_code})"
+                            except Exception as e:
+                                status = "Down"
+                                print(f"[ERROR] Failed to check {url_obj.url}: {e}")
+                            
+                            new_screenshot = take_screenshot(url_obj.url)
+                            visual_change = False
+                            if new_screenshot and url_obj.last_screenshot and os.path.exists(url_obj.last_screenshot):
+                                visual_change = compare_screenshots(url_obj.last_screenshot, new_screenshot)
+                            
+                            if url_obj.status != status or visual_change:
+                                alert = f"URL: {url_obj.url}\nStatus: {status}"
+                                if visual_change:
+                                    alert += "\nVisual change detected!"
+                                send_email("Website Status Alert", alert)
+                                send_telegram(alert)
+                            
+                            url_obj.status = status
+                            url_obj.last_checked = datetime.utcnow()
+                            if new_screenshot:
+                                old_screenshot = url_obj.last_screenshot
+                                url_obj.last_screenshot = new_screenshot
+                                if old_screenshot and os.path.exists(old_screenshot):
+                                    try:
+                                        os.remove(old_screenshot)
+                                    except Exception as e:
+                                        print(f"[ERROR] Failed to delete old screenshot: {e}")
+                            
+                            try:
+                                db.session.commit()
+                                last_check[url_obj.id] = current_time
+                                print(f"[INFO] Checked {url_obj.url} at {datetime.utcnow()}")
+                            except Exception as e:
+                                db.session.rollback()
+                                print(f"[ERROR] Database commit failed: {e}")
                 
-                # Sleep based on the minimum active interval
+                # Sleep for the shortest interval among active URLs
                 active_intervals = [url.interval for url in urls if url.is_active]
                 sleep_time = min(active_intervals) if active_intervals else 60
                 time.sleep(sleep_time)
