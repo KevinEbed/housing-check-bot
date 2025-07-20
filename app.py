@@ -157,12 +157,12 @@ def monitor_websites():
                             mse_value = np.mean((np.array(Image.open(url_obj.last_screenshot).convert("RGB").resize((1280, 720))) - 
                                               np.array(Image.open(new_shot).convert("RGB").resize((1280, 720)))) ** 2) / (255 ** 2)
 
-                        # Debug notification with screenshot comparison
-                        alert = f"URL: {url_obj.url}\nStatus: {status}\nTime: {datetime.utcnow()}"
-                        if visual_change:
-                            alert += f"\nVisual change detected! MSE: {mse_value:.4f}"
-                        send_email("Website Status Debug", alert)
-                        send_telegram(alert)
+                        if (url_obj.status != status or visual_change) and status != "Unknown":
+                            alert = f"URL: {url_obj.url}\nStatus: {status}\nTime: {datetime.utcnow()}"
+                            if visual_change:
+                                alert += f"\nVisual change detected! MSE: {mse_value:.4f}"
+                            send_email("Website Status Alert", alert)
+                            send_telegram(alert)
 
                         if new_shot:
                             old = url_obj.last_screenshot
