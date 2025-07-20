@@ -1,17 +1,18 @@
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: #f2f6fc;
+  background: #f4f6f8;
   margin: 0;
-  padding: 0;
+  padding: 20px;
+  color: #333;
 }
 
 .container {
-  width: 80%;
-  margin: 50px auto;
-  background: #ffffff;
+  max-width: 800px;
+  margin: auto;
+  background: #fff;
   padding: 30px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
   border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
 }
 
 h1, h2 {
@@ -19,33 +20,33 @@ h1, h2 {
   color: #2c3e50;
 }
 
-.form-box {
+form.url-form {
   display: flex;
-  justify-content: center;
   gap: 10px;
   margin-bottom: 30px;
+  justify-content: center;
 }
 
-input[type="text"],
-input[type="number"] {
+input[type="text"], input[type="number"] {
   padding: 10px;
+  font-size: 16px;
   border: 1px solid #ccc;
   border-radius: 8px;
-  width: 300px;
+  width: 250px;
 }
 
 button {
   padding: 10px 20px;
-  background-color: #0066cc;
+  font-size: 16px;
+  background: #3498db;
   color: white;
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  transition: background-color 0.3s ease;
 }
 
 button:hover {
-  background-color: #0052a3;
+  background: #2980b9;
 }
 
 table {
@@ -54,14 +55,18 @@ table {
   text-align: center;
 }
 
-table thead {
-  background-color: #0066cc;
-  color: white;
+th, td {
+  padding: 12px;
+  border-bottom: 1px solid #ddd;
 }
 
-table td, table th {
-  padding: 12px;
-  border: 1px solid #ddd;
+th {
+  background: #ecf0f1;
+}
+
+td a {
+  color: #2980b9;
+  text-decoration: none;
 }
 
 .changed {
@@ -70,9 +75,11 @@ table td, table th {
 }
 
 .unchanged {
-  color: #27ae60;
+  color: #2ecc71;
+  font-weight: bold;
 }
 
 .error {
   color: #f39c12;
+  font-weight: bold;
 }
