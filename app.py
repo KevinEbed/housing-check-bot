@@ -1,14 +1,10 @@
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timezone
-import requests
+import requests, threading, time, os
+from dotenv import load_dotenv
 import smtplib
 from email.mime.text import MIMEText
-import threading
-import os
-import hashlib
-import time
-from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -17,7 +13,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///urls.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# Environment variables
 EMAIL_SENDER = os.getenv("EMAIL_SENDER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
@@ -26,79 +21,79 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 class URL(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    address = db.Column(db.String(2083), nullable=False)
-    interval = db.Column(db.Integer, default=60)
-    last_checked = db.Column(db.DateTime(timezone=True), nullable=True)
-    status = db.Column(db.String(20), nullable=True)
-    content_hash = db.Column(db.String(64), nullable=True)
+    url = db.Column(db.String(2048), nullable=False)
+    last_checked = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    status = db.Column(db.String(100), default="Not Checked")
 
-def get_hash(content):
-    return hashlib.sha256(content.encode('utf-8')).hexdigest()
-
-def send_email(subject, body):
-    try:
-        msg = MIMEText(body)
-        msg['Subject'] = subject
-        msg['From'] = EMAIL_SENDER
-        msg['To'] = EMAIL_RECEIVER
-
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-            smtp.login(EMAIL_SENDER, EMAIL_PASSWORD)
-            smtp.send_message(msg)
-        print("Email sent")
-    except Exception as e:
-        print("Email failed:", e)
-
-def send_telegram(message):
-    try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        data = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
-        requests.post(url, data=data)
-        print("Telegram sent")
-    except Exception as e:
-        print("Telegram failed:", e)
+db.create_all()
 
 def monitor_websites():
-    with app.app_context():
-        while True:
-            urls = URL.query.all()
-            for url in urls:
-                try:
-                    response = requests.get(url.address, timeout=10)
-                    content = response.text
-                    new_hash = get_hash(content)
+    while True:
+        urls = URL.query.all()
+        for url_obj in urls:
+            try:
+                response = requests.get(url_obj.url, timeout=10)
+                url_obj.status = "Up" if response.status_code == 200 else f"Down: {response.status_code}"
+            except Exception as e:
+                url_obj.status = f"Down: {e}"
+                send_email(url_obj.url)
+                send_telegram_message(url_obj.url)
+            url_obj.last_checked = datetime.now(timezone.utc)
+            db.session.commit()
+        time.sleep(300)  # every 5 mins
 
-                    if url.content_hash != new_hash:
-                        url.content_hash = new_hash
-                        url.status = "Changed"
-                        send_email("Website Changed", f"{url.address} has changed.")
-                        send_telegram(f"🔔 {url.address} has changed.")
-                    else:
-                        url.status = "Unchanged"
+def send_email(url):
+    subject = f"Website Down: {url}"
+    body = f"The website {url} appears to be down."
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = EMAIL_SENDER
+    msg["To"] = EMAIL_RECEIVER
 
-                    url.last_checked = datetime.now(timezone.utc)
-                    db.session.commit()
-                except Exception as e:
-                    url.status = "Error"
-                    db.session.commit()
-                    print(f"Error checking {url.address}: {e}")
-            time.sleep(60)
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+            server.sendmail(EMAIL_SENDER, EMAIL_RECEIVER, msg.as_string())
+        print("Email sent")
+    except Exception as e:
+        print(f"Email failed: {e}")
 
-@app.route('/', methods=['GET', 'POST'])
+def send_telegram_message(url):
+    message = f"🚨 The website {url} appears to be DOWN!"
+    telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    try:
+        response = requests.post(telegram_url, json={
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": message
+        })
+        if response.status_code == 200:
+            print("Telegram sent")
+        else:
+            print(f"Telegram failed: {response.text}")
+    except Exception as e:
+        print(f"Telegram error: {e}")
+
+@app.route("/", methods=["GET", "POST"])
 def index():
-    if request.method == 'POST':
-        address = request.form['address']
-        interval = int(request.form['interval'])
-        if address:
-            new_url = URL(address=address, interval=interval)
+    if request.method == "POST":
+        url = request.form.get("url")
+        if url:
+            new_url = URL(url=url)
             db.session.add(new_url)
             db.session.commit()
-        return redirect('/')
+        return redirect(url_for("index"))
     urls = URL.query.all()
-    return render_template('index.html', urls=urls)
+    return render_template("index.html", urls=urls)
 
-if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-    threading.Thread(target=monitor_websites, daemon=True).start()
-    app.run(host='0.0.0.0', port=8080)
+@app.route("/delete/<int:url_id>", methods=["POST"])
+def delete(url_id):
+    url_obj = URL.query.get_or_404(url_id)
+    db.session.delete(url_obj)
+    db.session.commit()
+    return redirect(url_for("index"))
+
+# Start the monitoring thread
+threading.Thread(target=monitor_websites, daemon=True).start()
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8080)
