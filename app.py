@@ -19,7 +19,8 @@ import numpy as np
 
 load_dotenv()
 
-app = Flask(__name__)
+# Explicitly set static folder
+app = Flask(__name__, static_folder='static')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///urls.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
