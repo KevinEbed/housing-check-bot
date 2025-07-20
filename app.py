@@ -1,53 +1,32 @@
-from flask import Flask, request, redirect, url_for, render_template, send_from_directory
+from flask import Flask, render_template, request, redirect
 from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
 import requests
+import hashlib
 import os
 import smtplib
 import threading
 import time
-from datetime import datetime
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
-from urllib.parse import urlparse
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
-from PIL import Image
-import hashlib
-import numpy as np
 
 load_dotenv()
 
-app = Flask(__name__, static_folder='static')
+app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///urls.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
+# Email and Telegram setup
 EMAIL_SENDER = os.getenv("EMAIL_SENDER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
-print(f"DEBUG - EMAIL_SENDER: {EMAIL_SENDER}")
-print(f"DEBUG - EMAIL_PASSWORD: {EMAIL_PASSWORD}")
-print(f"DEBUG - EMAIL_RECEIVER: {EMAIL_RECEIVER}")
-print(f"DEBUG - TELEGRAM_TOKEN: {TELEGRAM_TOKEN}")
-print(f"DEBUG - TELEGRAM_CHAT_ID: {TELEGRAM_CHAT_ID}")
-
-missing_vars = [name for name, val in [
-    ("EMAIL_SENDER", EMAIL_SENDER),
-    ("EMAIL_PASSWORD", EMAIL_PASSWORD),
-    ("EMAIL_RECEIVER", EMAIL_RECEIVER),
-    ("TELEGRAM_TOKEN", TELEGRAM_TOKEN),
-    ("TELEGRAM_CHAT_ID", TELEGRAM_CHAT_ID)
-] if not val]
-if missing_vars:
-    raise ValueError(f"Missing environment variables: {', '.join(missing_vars)}")
-
-SCREENSHOTS_DIR = "/app/screenshots"
-os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 
 class URL(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -57,215 +36,123 @@ class URL(db.Model):
     last_checked = db.Column(db.DateTime)
     status = db.Column(db.String(20))
     last_screenshot = db.Column(db.String(255))
+    last_hash = db.Column(db.String(64))  # ✅ Added for change detection
 
-def get_screenshot_filename(url, suffix=""):
-    url_hash = hashlib.md5(url.encode()).hexdigest()
-    return os.path.join(SCREENSHOTS_DIR, f"{url_hash}{suffix}.png")
+# Create the DB
+with app.app_context():
+    db.create_all()
 
-def take_screenshot(url, max_retries=3):
-    for attempt in range(max_retries):
-        try:
-            chrome_options = Options()
-            chrome_options.add_argument("--headless")
-            chrome_options.add_argument("--no-sandbox")
-            chrome_options.add_argument("--disable-dev-shm-usage")
-            chrome_options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/chromium")
-            service = Service(os.getenv("CHROMEDRIVER_PATH", "/usr/lib/chromium-browser/chromedriver"))
-            driver = webdriver.Chrome(service=service, options=chrome_options)
-            driver.set_window_size(1280, 720)
-            driver.get(url)
-            time.sleep(5)
-            timestamp = int(time.time())
-            screenshot_path = get_screenshot_filename(url, f"_{timestamp}")
-            driver.save_screenshot(screenshot_path)
-            driver.quit()
-            if os.path.exists(screenshot_path):
-                print(f"[INFO] Screenshot saved: {screenshot_path}")
-                return screenshot_path
-            else:
-                print(f"[ERROR] Screenshot file not found: {screenshot_path}")
-                return None
-        except Exception as e:
-            print(f"[ERROR] Screenshot attempt {attempt + 1}/{max_retries} failed for {url}: {e}")
-            if attempt < max_retries - 1:
-                time.sleep(2)
-            continue
-    print(f"[ERROR] All {max_retries} attempts failed for {url}")
-    return None
+# Get hash of a screenshot file
+def get_file_hash(filepath):
+    hasher = hashlib.sha256()
+    with open(filepath, 'rb') as f:
+        buf = f.read()
+        hasher.update(buf)
+    return hasher.hexdigest()
 
-def compare_screenshots(img1_path, img2_path, threshold=0.1):
+# Capture screenshot and return file path
+def take_screenshot(url, filename):
+    options = Options()
+    options.headless = True
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)
+    driver.set_window_size(1920, 1080)
+    driver.get(url)
+    time.sleep(3)
+    filepath = os.path.join('static/screenshots', filename)
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    driver.save_screenshot(filepath)
+    driver.quit()
+    return filepath
+
+# Email alert
+def send_email_alert(url):
+    subject = "Website Change Detected"
+    body = f"The content of {url} has changed."
+    msg = MIMEText(body)
+    msg['Subject'] = subject
+    msg['From'] = EMAIL_SENDER
+    msg['To'] = EMAIL_RECEIVER
+
     try:
-        print(f"[DEBUG] Comparing {img1_path} vs {img2_path}")
-        img1 = Image.open(img1_path).convert("RGB").resize((1280, 720))
-        img2 = Image.open(img2_path).convert("RGB").resize((1280, 720))
-        arr1 = np.array(img1)
-        arr2 = np.array(img2)
-        mse = np.mean((arr1 - arr2) ** 2)
-        difference = mse / (255 ** 2)
-        print(f"[INFO] MSE: {mse:.2f}, Normalized: {difference:.4f}")
-        return difference > threshold
-    except Exception as e:
-        print(f"[ERROR] Image comparison failed: {e}")
-        return False
-
-def send_email(subject, body):
-    try:
-        msg = MIMEText(body)
-        msg['From'] = EMAIL_SENDER
-        msg['To'] = EMAIL_RECEIVER
-        msg['Subject'] = subject
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(EMAIL_SENDER, EMAIL_PASSWORD)
             server.send_message(msg)
-        print("[INFO] Email sent.")
+        print("Email alert sent")
     except Exception as e:
-        print(f"[ERROR] Failed to send email: {e}")
+        print(f"Error sending email: {e}")
 
-def send_telegram(message):
+# Telegram alert
+def send_telegram_alert(url):
+    message = f"🔔 Website Change Detected:\n{url}"
+    telegram_api = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     try:
-        requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-                      data={"chat_id": TELEGRAM_CHAT_ID, "text": message})
-        print("[INFO] Telegram message sent.")
+        requests.post(telegram_api, data={'chat_id': TELEGRAM_CHAT_ID, 'text': message})
+        print("Telegram alert sent")
     except Exception as e:
-        print(f"[ERROR] Failed to send Telegram message: {e}")
+        print(f"Error sending Telegram message: {e}")
 
+# Monitoring loop
 def monitor_websites():
-    with app.app_context():
-        last_check = {}
-        print("[INFO] Monitoring thread started.")
-        while True:
-            try:
-                urls = URL.query.all()
-                now = time.time()
-                for url_obj in urls:
-                    if not url_obj.is_active:
-                        continue
-                    last_time = last_check.get(url_obj.id, 0)
-                    if now - last_time >= url_obj.interval:
-                        try:
-                            response = requests.get(url_obj.url, timeout=10)
-                            status = "Up" if response.status_code == 200 else f"Down ({response.status_code})"
-                        except Exception as e:
-                            print(f"[ERROR] {url_obj.url} unreachable: {e}")
-                            status = "Down"
+    while True:
+        with app.app_context():
+            urls = URL.query.filter_by(is_active=True).all()
+            for url_obj in urls:
+                try:
+                    now = datetime.now()
+                    if url_obj.last_checked is None or (now - url_obj.last_checked).seconds >= url_obj.interval:
+                        print(f"[{now}] Checking {url_obj.url}...")
+                        response = requests.get(url_obj.url, timeout=10)
+                        url_obj.status = str(response.status_code)
+                        filename = f"{url_obj.id}_{int(now.timestamp())}.png"
+                        screenshot_path = take_screenshot(url_obj.url, filename)
+                        new_hash = get_file_hash(screenshot_path)
 
-                        new_shot = take_screenshot(url_obj.url)
-                        visual_change = False
-                        mse_value = 0.0
-                        if new_shot and url_obj.last_screenshot and os.path.exists(url_obj.last_screenshot):
-                            visual_change = compare_screenshots(url_obj.last_screenshot, new_shot)
-                            mse_value = np.mean((np.array(Image.open(url_obj.last_screenshot).convert("RGB").resize((1280, 720))) - 
-                                              np.array(Image.open(new_shot).convert("RGB").resize((1280, 720)))) ** 2) / (255 ** 2)
+                        if url_obj.last_hash and new_hash != url_obj.last_hash:
+                            print("Change detected!")
+                            send_email_alert(url_obj.url)
+                            send_telegram_alert(url_obj.url)
+                        else:
+                            print("No change.")
 
-                        if (url_obj.status != status or visual_change) and status != "Unknown":
-                            alert = f"URL: {url_obj.url}\nStatus: {status}\nTime: {datetime.utcnow()}"
-                            if visual_change:
-                                alert += f"\nVisual change detected! MSE: {mse_value:.4f}"
-                            send_email("Website Status Alert", alert)
-                            send_telegram(alert)
+                        url_obj.last_checked = now
+                        url_obj.last_screenshot = screenshot_path
+                        url_obj.last_hash = new_hash
+                        db.session.commit()
+                except Exception as e:
+                    print(f"Error checking {url_obj.url}: {e}")
+        time.sleep(10)
 
-                        if new_shot:
-                            old = url_obj.last_screenshot
-                            url_obj.last_screenshot = new_shot
-                            if old and os.path.exists(old):
-                                try:
-                                    os.remove(old)
-                                except Exception as e:
-                                    print(f"[ERROR] Could not delete old screenshot: {e}")
-
-                        url_obj.status = status
-                        url_obj.last_checked = datetime.utcnow()
-                        try:
-                            db.session.commit()
-                            last_check[url_obj.id] = now
-                            print(f"[INFO] Checked {url_obj.url} at {datetime.utcnow()}")
-                        except Exception as e:
-                            db.session.rollback()
-                            print(f"[ERROR] Commit failed: {e}")
-
-                sleep_time = min([u.interval for u in urls if u.is_active] or [60])
-                print(f"[INFO] Sleeping for {sleep_time}s")
-                time.sleep(sleep_time)
-            except Exception as e:
-                print(f"[ERROR] Monitor thread error: {e}")
-                time.sleep(60)
-
+# Routes
 @app.route('/')
 def index():
-    try:
-        urls = URL.query.all()
-        return render_template('index.html', urls=urls)
-    except Exception as e:
-        return f"Error: {e}", 500
+    urls = URL.query.all()
+    return render_template('index.html', urls=urls)
 
 @app.route('/add', methods=['POST'])
 def add():
-    url = request.form.get('url')
-    interval = request.form.get('interval', type=int, default=60)
-    parsed = urlparse(url)
-    if not url or not parsed.scheme or not parsed.netloc:
-        return "Invalid URL", 400
-    try:
-        new_url = URL(url=url, interval=interval)
-        db.session.add(new_url)
-        db.session.commit()
-        return redirect(url_for('index'))
-    except Exception as e:
-        db.session.rollback()
-        return f"Add failed: {e}", 500
+    url = request.form['url']
+    interval = int(request.form.get('interval', 60))
+    new_url = URL(url=url, interval=interval)
+    db.session.add(new_url)
+    db.session.commit()
+    return redirect('/')
 
-@app.route('/start/<int:url_id>')
-def start(url_id):
-    try:
-        url_obj = URL.query.get_or_404(url_id)
-        url_obj.is_active = True
-        db.session.commit()
-        return redirect(url_for('index'))
-    except Exception as e:
-        db.session.rollback()
-        return f"Start failed: {e}", 500
-
-@app.route('/stop/<int:url_id>')
-def stop(url_id):
-    try:
-        url_obj = URL.query.get_or_404(url_id)
-        url_obj.is_active = False
-        db.session.commit()
-        return redirect(url_for('index'))
-    except Exception as e:
-        db.session.rollback()
-        return f"Stop failed: {e}", 500
+@app.route('/toggle/<int:url_id>')
+def toggle(url_id):
+    url = URL.query.get_or_404(url_id)
+    url.is_active = not url.is_active
+    db.session.commit()
+    return redirect('/')
 
 @app.route('/delete/<int:url_id>')
 def delete(url_id):
-    try:
-        url_obj = URL.query.get_or_404(url_id)
-        if url_obj.last_screenshot and os.path.exists(url_obj.last_screenshot):
-            os.remove(url_obj.last_screenshot)
-        db.session.delete(url_obj)
-        db.session.commit()
-        return redirect(url_for('index'))
-    except Exception as e:
-        db.session.rollback()
-        return f"Delete failed: {e}", 500
-
-@app.route('/screenshots/<path:filename>')
-def serve_screenshot(filename):
-    try:
-        return send_from_directory(SCREENSHOTS_DIR, filename)
-    except Exception as e:
-        print(f"[ERROR] Failed to serve screenshot: {e}")
-        return "Screenshot not found", 404
-
-@app.route('/test-static')
-def test_static():
-    try:
-        return send_from_directory(app.static_folder, 'style.css')
-    except Exception as e:
-        return f"Static file error: {str(e)}", 500
+    url = URL.query.get_or_404(url_id)
+    db.session.delete(url)
+    db.session.commit()
+    return redirect('/')
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     threading.Thread(target=monitor_websites, daemon=True).start()
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    app.run(debug=False, host='0.0.0.0', port=8080)
