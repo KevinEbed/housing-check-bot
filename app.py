@@ -52,25 +52,11 @@ def send_telegram(message):
         print("Telegram failed:", e)
 
 def monitor_websites():
-    while True:
-        urls = URL.query.all()
-        for url in urls:
-            try:
-                response = requests.get(url.address, timeout=10)
-                if response.status_code == 200:
-                    url.status = "UP"
-                else:
-                    url.status = "DOWN"
-                    send_email("Website DOWN", f"{url.address} is DOWN")
-                    send_telegram(f"ALERT: {url.address} is DOWN")
-            except:
-                url.status = "DOWN"
-                send_email("Website DOWN", f"{url.address} is DOWN")
-                send_telegram(f"ALERT: {url.address} is DOWN")
-
-            url.last_checked = datetime.utcnow()
-            db.session.commit()
-        import time; time.sleep(60)
+    with app.app_context():  # Add this line
+        while True:
+            urls = URL.query.all()
+            # Your monitoring logic here
+            time.sleep(60)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
