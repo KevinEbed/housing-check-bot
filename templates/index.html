@@ -1,38 +1,44 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>URL Monitor</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <meta charset="UTF-8">
+    <title>Website Monitor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-  <div class="container">
-    <h1>🌐 URL Monitor</h1>
-    <form method="POST" class="url-form">
-      <input type="text" name="address" placeholder="https://example.com" required>
-      <input type="number" name="interval" value="60" min="10" required>
-      <button type="submit">➕ Add URL</button>
-    </form>
+    <div class="container">
+        <h1>🌐 Website Monitor Dashboard</h1>
+        <form method="POST" class="form">
+            <input type="text" name="url" placeholder="Enter website URL" required>
+            <button type="submit">Add</button>
+        </form>
 
-    <h2>📋 Monitored URLs</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>URL</th>
-          <th>Interval (sec)</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for url in urls %}
-        <tr>
-          <td><a href="{{ url.address }}" target="_blank">{{ url.address }}</a></td>
-          <td>{{ url.interval }}</td>
-          <td class="{{ url.status|lower }}">{{ url.status or 'N/A' }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>URL</th>
+                    <th>Status</th>
+                    <th>Last Checked</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for url in urls %}
+                <tr>
+                    <td>{{ url.id }}</td>
+                    <td><a href="{{ url.url }}" target="_blank">{{ url.url }}</a></td>
+                    <td class="{{ 'up' if 'Up' in url.status else 'down' }}">{{ url.status }}</td>
+                    <td>{{ url.last_checked.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('delete', url_id=url.id) }}">
+                            <button class="delete">🗑 Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </body>
 </html>
