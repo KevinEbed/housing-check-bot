@@ -37,7 +37,7 @@ class URL(db.Model):
     link = db.Column(db.String(500), nullable=False)
     last_hash = db.Column(db.String(64), nullable=True)
     last_screenshot = db.Column(db.String(255), nullable=True)
-    interval = db.Column(db.Integer, default=60)  # Configurable interval in seconds
+    interval = db.Column(db.Integer, default=60)
     alerted = db.Column(db.Boolean, default=False)
 
 with app.app_context():
@@ -64,11 +64,11 @@ def take_screenshot(url):
         driver.save_screenshot(screenshot_path)
         driver.quit()
         if os.path.exists(screenshot_path):
-            print(f"[INFO] Screenshot saved: {screenshot_path}")
+            print(f"[INFO] {time.strftime('%H:%M:%S')} Screenshot saved: {screenshot_path}")
             return screenshot_path
         return None
     except Exception as e:
-        print(f"[ERROR] Screenshot failed for {url}: {e}")
+        print(f"[ERROR] {time.strftime('%H:%M:%S')} Screenshot failed for {url}: {e}")
         return None
 
 def compare_screenshots(img1_path, img2_path, threshold=0.1):
@@ -79,27 +79,28 @@ def compare_screenshots(img1_path, img2_path, threshold=0.1):
         arr2 = np.array(img2)
         mse = np.mean((arr1 - arr2) ** 2)
         difference = mse / (255 ** 2)
-        print(f"[INFO] MSE: {mse:.2f}, Normalized: {difference:.4f}")
+        print(f"[INFO] {time.strftime('%H:%M:%S')} MSE: {mse:.2f}, Normalized: {difference:.4f}")
         return difference > threshold, difference
     except Exception as e:
-        print(f"[ERROR] Image comparison failed: {e}")
+        print(f"[ERROR] {time.strftime('%H:%M:%S')} Image comparison failed: {e}")
         return False, 0.0
 
 def send_telegram_alert(message):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": message})
-        print("[INFO] Telegram alert sent.")
+        print(f"[INFO] {time.strftime('%H:%M:%S')} Telegram alert sent.")
     except Exception as e:
-        print(f"[ERROR] Failed to send Telegram alert: {e}")
+        print(f"[ERROR] {time.strftime('%H:%M:%S')} Failed to send Telegram alert: {e}")
 
 def monitor_websites():
+    print(f"[INFO] {time.strftime('%H:%M:%S')} Monitoring thread started.")
     while True:
         with app.app_context():
             urls = URL.query.all()
             now = time.time()
             for url_obj in urls:
-                if not url_obj.alerted or now - time.time() >= url_obj.interval:  # Reset or check interval
+                if now - time.time() >= url_obj.interval:  # Check based on interval
                     try:
                         response = requests.get(url_obj.link, timeout=10)
                         content_hash = hashlib.sha256(response.text.encode()).hexdigest()
@@ -118,7 +119,7 @@ def monitor_websites():
                             send_telegram_alert(alert)
                             url_obj.alerted = True
                         elif not (content_change or visual_change):
-                            url_obj.alerted = False  # Reset alerted if no change
+                            url_obj.alerted = False
 
                         if new_shot:
                             if url_obj.last_screenshot and os.path.exists(url_obj.last_screenshot):
@@ -127,10 +128,10 @@ def monitor_websites():
                         url_obj.last_hash = content_hash
                         url_obj.last_checked = datetime.utcnow()
                         db.session.commit()
-                        print(f"[INFO] Checked {url_obj.link} at {datetime.utcnow()}")
+                        print(f"[INFO] {time.strftime('%H:%M:%S')} Checked {url_obj.link} at {datetime.utcnow()}")
                     except Exception as e:
-                        print(f"[ERROR] Error checking {url_obj.link}: {e}")
-                        time.sleep(5)  # Brief pause on error
+                        print(f"[ERROR] {time.strftime('%H:%M:%S')} Error checking {url_obj.link}: {e}")
+                        time.sleep(5)
             time.sleep(5)  # Minimum sleep to prevent tight loop
 
 @app.route('/')
@@ -164,10 +165,9 @@ def serve_screenshot(filename):
     try:
         return send_from_directory(SCREENSHOTS_DIR, filename)
     except Exception as e:
-        print(f"[ERROR] Failed to serve screenshot: {e}")
+        print(f"[ERROR] {time.strftime('%H:%M:%S')} Failed to serve screenshot: {e}")
         return "Screenshot not found", 404
 
-# Start background monitor thread
 monitor_thread = threading.Thread(target=monitor_websites, daemon=True)
 monitor_thread.start()
 
