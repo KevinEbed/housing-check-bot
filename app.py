@@ -30,6 +30,13 @@ EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
+# Debug: Print environment variables
+print(f"DEBUG - EMAIL_SENDER: {EMAIL_SENDER}")
+print(f"DEBUG - EMAIL_PASSWORD: {EMAIL_PASSWORD}")
+print(f"DEBUG - EMAIL_RECEIVER: {EMAIL_RECEIVER}")
+print(f"DEBUG - TELEGRAM_TOKEN: {TELEGRAM_TOKEN}")
+print(f"DEBUG - TELEGRAM_CHAT_ID: {TELEGRAM_CHAT_ID}")
+
 # Verify environment variables
 missing_vars = [var for var, value in [
     ("EMAIL_SENDER", EMAIL_SENDER),
@@ -66,7 +73,9 @@ def take_screenshot(url):
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
-        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+        chrome_options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/chromium")
+        service = Service(os.getenv("CHROMEDRIVER_PATH", "/usr/lib/chromium-browser/chromedriver"))
+        driver = webdriver.Chrome(service=service, options=chrome_options)
         driver.set_window_size(1280, 720)  # Standardize window size
         driver.get(url)
         time.sleep(2)  # Wait for page to load
