@@ -1,6 +1,6 @@
 # FULL UPDATED FLASK APP WITH HASH + SCREENSHOT COMPARISON + RENDER TEMPLATE
 
-from flask import Flask, request, redirect, render_template
+from flask import Flask, request, redirect, render_template_string
 from flask_sqlalchemy import SQLAlchemy
 import requests
 import hashlib
