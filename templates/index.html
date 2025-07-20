@@ -1,0 +1,61 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Website Monitor</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+  <div class="container py-5">
+    <h1 class="mb-4 text-center">📡 Website Monitor</h1>
+    <form method="POST" class="row g-3 mb-5">
+      <div class="col-md-6">
+        <input type="text" name="link" class="form-control" placeholder="Enter website URL" required>
+      </div>
+      <div class="col-md-4">
+        <input type="number" name="interval" class="form-control" placeholder="Interval (seconds)" required>
+      </div>
+      <div class="col-md-2 d-grid">
+        <button type="submit" class="btn btn-primary">Add URL</button>
+      </div>
+    </form>
+    <table class="table table-bordered table-hover">
+      <thead class="table-dark">
+        <tr>
+          <th>#</th>
+          <th>URL</th>
+          <th>Interval</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for url in urls %}
+        <tr>
+          <td>{{ url.id }}</td>
+          <td>{{ url.link }}</td>
+          <td>{{ url.interval }}s</td>
+          <td>
+            {% if url.monitoring %}
+              <span class="badge bg-success">Running</span>
+            {% else %}
+              <span class="badge bg-secondary">Stopped</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if not url.monitoring %}
+              <a href="/start/{{ url.id }}" class="btn btn-success btn-sm">Start</a>
+            {% else %}
+              <a href="/stop/{{ url.id }}" class="btn btn-warning btn-sm">Stop</a>
+            {% endif %}
+            <a href="/delete/{{ url.id }}" class="btn btn-danger btn-sm">Delete</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>
