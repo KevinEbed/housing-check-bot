@@ -1,13 +1,10 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
-import requests
-import threading
-import os
+import requests, threading, os, smtplib
 from dotenv import load_dotenv
-import smtplib
 from email.mime.text import MIMEText
-
+import time
 
 load_dotenv()
 
@@ -15,7 +12,6 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///urls.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
-
 
 EMAIL_SENDER = os.getenv("EMAIL_SENDER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
@@ -30,7 +26,6 @@ class URL(db.Model):
     status = db.Column(db.String(10), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-# Monitor function
 def monitor_websites():
     while True:
         with app.app_context():
@@ -43,23 +38,20 @@ def monitor_websites():
                     new_status = 'DOWN'
 
                 if url_obj.status != new_status:
-                    send_telegram_message(f"{url_obj.url} is now {new_status}")
+                    send_telegram_message(f"🔔 {url_obj.url} is now {new_status}")
                     url_obj.status = new_status
                     db.session.commit()
-        # Check every 60 seconds
-        import time; time.sleep(60)
+        time.sleep(60)
 
 def send_telegram_message(message):
     if TELEGRAM_TOKEN and TELEGRAM_CHAT_ID:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        payload = {
-            "chat_id": TELEGRAM_CHAT_ID,
-            "text": message
-        }
         try:
-            requests.post(url, json=payload)
+            requests.post(
+                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+                json={"chat_id": TELEGRAM_CHAT_ID, "text": message}
+            )
         except Exception as e:
-            print("Telegram error:", e)
+            print("Telegram Error:", e)
 
 @app.route('/')
 def index():
