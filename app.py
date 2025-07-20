@@ -18,6 +18,10 @@ from webdriver_manager.chrome import ChromeDriverManager
 import cv2
 from PIL import Image
 import numpy as np
+from apscheduler.schedulers.background import BackgroundScheduler
+
+scheduler = BackgroundScheduler()
+scheduler.start()
 
 # Load environment variables
 load_dotenv()
