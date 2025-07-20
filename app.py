@@ -16,7 +16,7 @@ EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# Flask & DB Setup
+# Flask Setup
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///urls.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -44,7 +44,6 @@ def send_email_alert(subject, body):
         msg["Subject"] = subject
         msg["From"] = EMAIL_SENDER
         msg["To"] = EMAIL_RECEIVER
-
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(EMAIL_SENDER, EMAIL_PASSWORD)
             server.sendmail(EMAIL_SENDER, EMAIL_RECEIVER, msg.as_string())
@@ -59,11 +58,11 @@ def monitor_website(url_id):
                 response = requests.get(url_obj.address, timeout=10)
                 if response.status_code != 200:
                     msg = f"Website {url_obj.address} returned status {response.status_code}"
-                    send_email_alert("Website Down", msg)
+                    send_email_alert("Website Alert", msg)
                     send_telegram_alert(msg)
             except requests.RequestException:
                 msg = f"Website {url_obj.address} is DOWN!"
-                send_email_alert("Website Down", msg)
+                send_email_alert("Website Alert", msg)
                 send_telegram_alert(msg)
 
             time.sleep(60)
@@ -79,6 +78,7 @@ def home():
             db.session.commit()
             threading.Thread(target=monitor_website, args=(new_url.id,), daemon=True).start()
         return redirect("/")
+    
     urls = URL.query.all()
     return render_template("index.html", urls=urls)
 
@@ -89,6 +89,7 @@ def stop_monitoring(url_id):
         url.monitoring = False
         db.session.commit()
     return redirect("/")
+
 
 if __name__ == "__main__":
      app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
