@@ -1,56 +1,61 @@
+<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Website Monitor</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 2em; background-color: #f9f9f9; }
-        h1 { color: #333; }
-        form { margin-bottom: 20px; }
-        input[type="text"], input[type="number"] {
-            padding: 5px; margin-right: 10px; width: 300px;
-        }
-        button { padding: 6px 12px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 10px; border-bottom: 1px solid #ccc; text-align: left; }
-        .actions a { margin-right: 10px; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Website Monitor</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body>
-    <h1>Website Change Monitor</h1>
-    <form method="POST">
-        <input type="text" name="link" placeholder="Enter website URL" required>
-        <input type="number" name="interval" placeholder="Interval (sec)" required min="30">
-        <button type="submit">Add Website</button>
+<body class="bg-light">
+  <div class="container py-5">
+    <h1 class="mb-4 text-center">📡 Website Monitor</h1>
+    <form method="POST" class="row g-3 mb-5">
+      <div class="col-md-6">
+        <input type="text" name="link" class="form-control" placeholder="Enter website URL" required>
+      </div>
+      <div class="col-md-4">
+        <input type="number" name="interval" class="form-control" placeholder="Interval (seconds)" required>
+      </div>
+      <div class="col-md-2 d-grid">
+        <button type="submit" class="btn btn-primary">Add URL</button>
+      </div>
     </form>
-
-    <h2>Monitored URLs</h2>
-    <table>
+    <table class="table table-bordered table-hover">
+      <thead class="table-dark">
         <tr>
-            <th>ID</th>
-            <th>URL</th>
-            <th>Interval (s)</th>
-            <th>Status</th>
-            <th>Actions</th>
+          <th>#</th>
+          <th>URL</th>
+          <th>Interval</th>
+          <th>Status</th>
+          <th>Actions</th>
         </tr>
+      </thead>
+      <tbody>
         {% for url in urls %}
         <tr>
-            <td>{{ url.id }}</td>
-            <td>{{ url.link }}</td>
-            <td>{{ url.interval }}</td>
-            <td>{{ 'Monitoring' if url.monitoring else 'Stopped' }}</td>
-            <td class="actions">
-                {% if url.monitoring %}
-                    <a href="/stop/{{ url.id }}">Stop</a>
-                {% else %}
-                    <a href="/start/{{ url.id }}">Start</a>
-                {% endif %}
-                <a href="/delete/{{ url.id }}" onclick="return confirm('Delete this URL?')">Delete</a>
-            </td>
+          <td>{{ url.id }}</td>
+          <td>{{ url.link }}</td>
+          <td>{{ url.interval }}s</td>
+          <td>
+            {% if url.monitoring %}
+              <span class="badge bg-success">Running</span>
+            {% else %}
+              <span class="badge bg-secondary">Stopped</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if not url.monitoring %}
+              <a href="/start/{{ url.id }}" class="btn btn-success btn-sm">Start</a>
+            {% else %}
+              <a href="/stop/{{ url.id }}" class="btn btn-warning btn-sm">Stop</a>
+            {% endif %}
+            <a href="/delete/{{ url.id }}" class="btn btn-danger btn-sm">Delete</a>
+          </td>
         </tr>
-        {% else %}
-        <tr><td colspan="5">No URLs being monitored yet.</td></tr>
         {% endfor %}
+      </tbody>
     </table>
+  </div>
 </body>
 </html>
