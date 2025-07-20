@@ -1,6 +1,6 @@
 FROM python:3.10
 
-# Install system dependencies for Pillow, Selenium, and others
+# Install system dependencies for Pillow, NumPy, Selenium, and others
 RUN apt-get update && apt-get install -y \
     chromium \
     chromium-driver \
@@ -11,6 +11,9 @@ RUN apt-get update && apt-get install -y \
     libfreetype6-dev \
     libopenjp2-7-dev \
     build-essential \
+    libblas-dev \
+    liblapack-dev \
+    gfortran \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
