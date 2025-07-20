@@ -1,11 +1,14 @@
-from flask import Flask, request, render_template, redirect
+from flask import Flask, request, redirect, render_template
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
-import requests, threading, time, os, smtplib
+import threading
+import requests
+import os
+import smtplib
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
+import time
 
-# Load .env file
+# Load environment variables
 load_dotenv()
 EMAIL_SENDER = os.getenv("EMAIL_SENDER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
@@ -13,61 +16,79 @@ EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
+# Flask & DB Setup
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///db.sqlite3"
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///urls.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 class URL(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    link = db.Column(db.String(200), nullable=False)
-    interval = db.Column(db.Integer, nullable=False)
-    monitoring = db.Column(db.Boolean, default=False)
+    address = db.Column(db.String(255), nullable=False)
+    monitoring = db.Column(db.Boolean, default=True)
 
 with app.app_context():
     db.create_all()
 
-def send_email(subject, body):
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = EMAIL_SENDER
-    msg["To"] = EMAIL_RECEIVER
-
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-        server.send_message(msg)
-
-def send_telegram(message):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
+def send_telegram_alert(message):
     try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
         requests.post(url, data=payload)
     except Exception as e:
-        print("Telegram error:", e)
+        print(f"Telegram Error: {e}")
 
-def monitor_website(url_obj):
-    while url_obj.monitoring:
-        try:
-            response = requests.get(url_obj.link, timeout=10)
-            if response.status_code != 200:
-                raise Exception(f"Status: {response.status_code}")
-        except Exception as e:
-            alert_msg = f"Website down: {url_obj.link}\nError: {e}"
-            send_email("Website Down Alert", alert_msg)
-            send_telegram(alert_msg)
-        time.sleep(url_obj.interval * 60)
+def send_email_alert(subject, body):
+    try:
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"] = EMAIL_SENDER
+        msg["To"] = EMAIL_RECEIVER
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+            server.sendmail(EMAIL_SENDER, EMAIL_RECEIVER, msg.as_string())
+    except Exception as e:
+        print(f"Email Error: {e}")
+
+def monitor_website(url_id):
+    with app.app_context():
+        url_obj = db.session.get(URL, url_id)
+        while url_obj and url_obj.monitoring:
+            try:
+                response = requests.get(url_obj.address, timeout=10)
+                if response.status_code != 200:
+                    msg = f"Website {url_obj.address} returned status {response.status_code}"
+                    send_email_alert("Website Down", msg)
+                    send_telegram_alert(msg)
+            except requests.RequestException:
+                msg = f"Website {url_obj.address} is DOWN!"
+                send_email_alert("Website Down", msg)
+                send_telegram_alert(msg)
+
+            time.sleep(60)
+            db.session.refresh(url_obj)
 
 @app.route("/", methods=["GET", "POST"])
-def index():
+def home():
     if request.method == "POST":
-        link = request.form["link"]
-        interval = int(request.form["interval"])
-        url = URL(link=link, interval=interval, monitoring=True)
-        db.session.add(url)
-        db.session.commit()
-        threading.Thread(target=monitor_website, args=(url,), daemon=True).start()
+        address = request.form.get("url")
+        if address:
+            new_url = URL(address=address)
+            db.session.add(new_url)
+            db.session.commit()
+            threading.Thread(target=monitor_website, args=(new_url.id,), daemon=True).start()
         return redirect("/")
     urls = URL.query.all()
     return render_template("index.html", urls=urls)
 
+@app.route("/stop/<int:url_id>")
+def stop_monitoring(url_id):
+    url = db.session.get(URL, url_id)
+    if url:
+        url.monitoring = False
+        db.session.commit()
+    return redirect("/")
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)), debug=True)
+    app.run(debug=True, port=8080)
