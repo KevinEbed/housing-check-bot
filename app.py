@@ -17,7 +17,6 @@ from PIL import Image
 import hashlib
 import numpy as np
 
-# Load environment variables
 load_dotenv()
 
 app = Flask(__name__, static_folder='static')
@@ -31,14 +30,23 @@ EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-required_vars = [("EMAIL_SENDER", EMAIL_SENDER), ("EMAIL_PASSWORD", EMAIL_PASSWORD),
-                 ("EMAIL_RECEIVER", EMAIL_RECEIVER), ("TELEGRAM_TOKEN", TELEGRAM_TOKEN),
-                 ("TELEGRAM_CHAT_ID", TELEGRAM_CHAT_ID)]
-missing = [name for name, val in required_vars if not val]
-if missing:
-    raise ValueError(f"Missing environment variables: {', '.join(missing)}")
+print(f"DEBUG - EMAIL_SENDER: {EMAIL_SENDER}")
+print(f"DEBUG - EMAIL_PASSWORD: {EMAIL_PASSWORD}")
+print(f"DEBUG - EMAIL_RECEIVER: {EMAIL_RECEIVER}")
+print(f"DEBUG - TELEGRAM_TOKEN: {TELEGRAM_TOKEN}")
+print(f"DEBUG - TELEGRAM_CHAT_ID: {TELEGRAM_CHAT_ID}")
 
-SCREENSHOTS_DIR = "screenshots"
+missing_vars = [name for name, val in [
+    ("EMAIL_SENDER", EMAIL_SENDER),
+    ("EMAIL_PASSWORD", EMAIL_PASSWORD),
+    ("EMAIL_RECEIVER", EMAIL_RECEIVER),
+    ("TELEGRAM_TOKEN", TELEGRAM_TOKEN),
+    ("TELEGRAM_CHAT_ID", TELEGRAM_CHAT_ID)
+] if not val]
+if missing_vars:
+    raise ValueError(f"Missing environment variables: {', '.join(missing_vars)}")
+
+SCREENSHOTS_DIR = "/app/screenshots"  # Adjusted for Railway
 os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 
 class URL(db.Model):
@@ -54,27 +62,36 @@ def get_screenshot_filename(url, suffix=""):
     url_hash = hashlib.md5(url.encode()).hexdigest()
     return os.path.join(SCREENSHOTS_DIR, f"{url_hash}{suffix}.png")
 
-def take_screenshot(url):
-    try:
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/chromium")
-        service = Service(os.getenv("CHROMEDRIVER_PATH", "/usr/lib/chromium-browser/chromedriver"))
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        driver.set_window_size(1280, 720)
-        driver.get(url)
-        time.sleep(2)
-        timestamp = int(time.time())
-        screenshot_path = get_screenshot_filename(url, f"_{timestamp}")
-        driver.save_screenshot(screenshot_path)
-        driver.quit()
-        print(f"[INFO] Screenshot saved: {screenshot_path}")
-        return screenshot_path
-    except Exception as e:
-        print(f"[ERROR] Screenshot failed for {url}: {e}")
-        return None
+def take_screenshot(url, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            chrome_options = Options()
+            chrome_options.add_argument("--headless")
+            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/chromium")
+            service = Service(os.getenv("CHROMEDRIVER_PATH", "/usr/lib/chromium-browser/chromedriver"))
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            driver.set_window_size(1280, 720)
+            driver.get(url)
+            time.sleep(5)  # Increased wait time
+            timestamp = int(time.time())
+            screenshot_path = get_screenshot_filename(url, f"_{timestamp}")
+            driver.save_screenshot(screenshot_path)
+            driver.quit()
+            if os.path.exists(screenshot_path):
+                print(f"[INFO] Screenshot saved: {screenshot_path}")
+                return screenshot_path
+            else:
+                print(f"[ERROR] Screenshot file not found: {screenshot_path}")
+                return None
+        except Exception as e:
+            print(f"[ERROR] Screenshot attempt {attempt + 1}/{max_retries} failed for {url}: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(2)  # Wait before retry
+            continue
+    print(f"[ERROR] All {max_retries} attempts failed for {url}")
+    return None
 
 def compare_screenshots(img1_path, img2_path, threshold=0.1):
     try:
@@ -126,7 +143,7 @@ def monitor_websites():
                     last_time = last_check.get(url_obj.id, 0)
                     if now - last_time >= url_obj.interval:
                         try:
-                            response = requests.get(url_obj.url, timeout=5)
+                            response = requests.get(url_obj.url, timeout=10)  # Increased timeout
                             status = "Up" if response.status_code == 200 else f"Down ({response.status_code})"
                         except Exception as e:
                             print(f"[ERROR] {url_obj.url} unreachable: {e}")
@@ -137,12 +154,12 @@ def monitor_websites():
                         if new_shot and url_obj.last_screenshot and os.path.exists(url_obj.last_screenshot):
                             visual_change = compare_screenshots(url_obj.last_screenshot, new_shot)
 
-                        if (url_obj.status != status or visual_change) and status != "Unknown":
-                            alert = f"URL: {url_obj.url}\nStatus: {status}"
-                            if visual_change:
-                                alert += "\nVisual change detected!"
-                            send_email("Website Status Alert", alert)
-                            send_telegram(alert)
+                        # Temporary debug: notify on every check
+                        alert = f"URL: {url_obj.url}\nStatus: {status}\nTime: {datetime.utcnow()}"
+                        if visual_change:
+                            alert += "\nVisual change detected!"
+                        send_email("Website Status Debug", alert)
+                        send_telegram(alert)
 
                         if new_shot:
                             old = url_obj.last_screenshot
@@ -158,7 +175,7 @@ def monitor_websites():
                         try:
                             db.session.commit()
                             last_check[url_obj.id] = now
-                            print(f"[INFO] Checked {url_obj.url}")
+                            print(f"[INFO] Checked {url_obj.url} at {datetime.utcnow()}")
                         except Exception as e:
                             db.session.rollback()
                             print(f"[ERROR] Commit failed: {e}")
@@ -166,10 +183,9 @@ def monitor_websites():
                 sleep_time = min([u.interval for u in urls if u.is_active] or [60])
                 print(f"[INFO] Sleeping for {sleep_time}s")
                 time.sleep(sleep_time)
-
             except Exception as e:
                 print(f"[ERROR] Monitor thread error: {e}")
-                time.sleep(60)
+                time.sleep(60)  # Retry after 60 seconds
 
 @app.route('/')
 def index():
@@ -232,11 +248,18 @@ def delete(url_id):
 
 @app.route('/screenshots/<path:filename>')
 def serve_screenshot(filename):
-    return send_from_directory(SCREENSHOTS_DIR, filename)
+    try:
+        return send_from_directory(SCREENSHOTS_DIR, filename)
+    except Exception as e:
+        print(f"[ERROR] Failed to serve screenshot: {e}")
+        return "Screenshot not found", 404
 
 @app.route('/test-static')
 def test_static():
-    return send_from_directory(app.static_folder, 'style.css')
+    try:
+        return send_from_directory(app.static_folder, 'style.css')
+    except Exception as e:
+        return f"Static file error: {str(e)}", 500
 
 if __name__ == '__main__':
     with app.app_context():
