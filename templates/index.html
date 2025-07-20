@@ -1,43 +1,78 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>Website Monitor</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .screenshot {
+            max-width: 200px;
+            max-height: 150px;
+        }
+        form {
+            margin-top: 20px;
+        }
+        input[type="text"] {
+            padding: 5px;
+            margin-right: 10px;
+        }
+        button {
+            padding: 5px 10px;
+        }
+    </style>
 </head>
 <body>
-    <h1>Monitored URLs</h1>
-    <form action="/add" method="post">
-        <input type="text" name="url" placeholder="Enter URL (e.g., https://example.com)" required>
+    <h1>Website Monitor</h1>
+    <form method="POST" action="/add">
+        <input type="text" name="url" placeholder="Enter URL" required>
         <button type="submit">Add URL</button>
     </form>
-    <table>
-        <tr>
-            <th>URL</th>
-            <th>Status</th>
-            <th>Last Checked</th>
-            <th>Active</th>
-            <th>Screenshot</th>
-            <th>Actions</th>
-        </tr>
-        {% for url in urls %}
-        <tr>
-            <td>{{ url.url }}</td>
-            <td>{{ url.status or 'Unknown' }}</td>
-            <td>{{ url.last_checked or 'Never' }}</td>
-            <td>{{ 'Yes' if url.is_active else 'No' }}</td>
-            <td>
-                {% if url.last_screenshot %}
-                <img src="/{{ url.last_screenshot }}" alt="Screenshot">
-                {% else %}
-                No screenshot
-                {% endif %}
-            </td>
-            <td>
-                <a href="/toggle/{{ url.id }}">Toggle</a>
-                <a href="/delete/{{ url.id }}">Delete</a>
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
+    {% if urls %}
+        <table>
+            <tr>
+                <th>ID</th>
+                <th>URL</th>
+                <th>Status</th>
+                <th>Last Checked</th>
+                <th>Screenshot</th>
+                <th>Actions</th>
+            </tr>
+            {% for url in urls %}
+                <tr>
+                    <td>{{ url.id }}</td>
+                    <td>{{ url.url }}</td>
+                    <td>{{ url.status or 'Unknown' }}</td>
+                    <td>{{ url.last_checked.strftime('%Y-%m-%d %H:%M:%S') if url.last_checked else 'Never' }}</td>
+                    <td>
+                        {% if url.last_screenshot and url.last_screenshot|length %}
+                            <a href="/screenshots/{{ url.last_screenshot.split('/')[-1] }}" target="_blank">
+                                <img src="/screenshots/{{ url.last_screenshot.split('/')[-1] }}" class="screenshot">
+                            </a>
+                        {% else %}
+                            No screenshot
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="/toggle/{{ url.id }}">Toggle</a> |
+                        <a href="/delete/{{ url.id }}" onclick="return confirm('Are you sure?')">Delete</a>
+                    </td>
+                </tr>
+            {% endfor %}
+        </table>
+    {% else %}
+        <p>No URLs monitored yet.</p>
+    {% endif %}
 </body>
 </html>
