@@ -3,28 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <title>URL Monitor</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-  <h1>URL Monitor</h1>
-  <form method="POST">
-    <input type="text" name="address" placeholder="https://example.com" required>
-    <input type="number" name="interval" value="60" min="10" required>
-    <button type="submit">Add</button>
-  </form>
-  <h2>Monitored URLs</h2>
-  <table border="1">
-    <tr>
-      <th>URL</th>
-      <th>Interval (sec)</th>
-      <th>Status</th>
-    </tr>
-    {% for url in urls %}
-    <tr>
-      <td>{{ url.address }}</td>
-      <td>{{ url.interval }}</td>
-      <td>{{ url.status }}</td>
-    </tr>
-    {% endfor %}
-  </table>
+  <div class="container">
+    <h1>🌐 URL Monitor</h1>
+    <form method="POST" class="url-form">
+      <input type="text" name="address" placeholder="https://example.com" required>
+      <input type="number" name="interval" value="60" min="10" required>
+      <button type="submit">➕ Add URL</button>
+    </form>
+
+    <h2>📋 Monitored URLs</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>URL</th>
+          <th>Interval (sec)</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for url in urls %}
+        <tr>
+          <td><a href="{{ url.address }}" target="_blank">{{ url.address }}</a></td>
+          <td>{{ url.interval }}</td>
+          <td class="{{ url.status|lower }}">{{ url.status or 'N/A' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </body>
 </html>
