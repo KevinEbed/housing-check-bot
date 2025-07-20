@@ -167,7 +167,7 @@ def home():
             db.session.add(new_url)
             db.session.commit()
     urls = URL.query.all()
-    return render_template("index.html", urls=urls)
+    return render_template_string("index.html", urls=urls)
 
 @app.route('/start/<int:url_id>')
 def start_monitoring(url_id):
