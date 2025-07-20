@@ -1,7 +1,6 @@
+# FULL UPDATED FLASK APP WITH HASH + SCREENSHOT COMPARISON + RENDER TEMPLATE
 
-# FULL UPDATED FLASK APP WITH HASH + SCREENSHOT COMPARISON
-
-from flask import Flask, request, redirect, render_template_string
+from flask import Flask, request, redirect, render_template
 from flask_sqlalchemy import SQLAlchemy
 import requests
 import hashlib
@@ -136,10 +135,6 @@ def monitor_website(url, url_id, interval):
         except Exception as e:
             print(f"[ERROR] During monitoring: {e}")
 
-HTML_TEMPLATE = """
-... (same HTML as your latest enhanced version, omitted here for brevity) ...
-"""
-
 @app.route('/', methods=['GET', 'POST'])
 def home():
     if request.method == 'POST':
@@ -150,7 +145,7 @@ def home():
             db.session.add(new_url)
             db.session.commit()
     urls = URL.query.all()
-    return render_template_string(HTML_TEMPLATE, urls=urls)
+    return render_template("index.html", urls=urls)
 
 @app.route('/start/<int:url_id>')
 def start_monitoring(url_id):
