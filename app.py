@@ -76,6 +76,7 @@ def take_screenshot(url, filename):
         time.sleep(2)
         driver.save_screenshot(filename)
         driver.quit()
+        print(f"[SCREENSHOT] Saved {filename}")
         return True
     except Exception as e:
         print(f"[ERROR] Screenshot failed: {e}")
@@ -173,15 +174,18 @@ def home():
     return render_template("index.html", urls=urls)
 
 @app.route('/start/<int:url_id>')
+@app.route('/start/<int:url_id>')
 def start_monitoring(url_id):
     url_entry = URL.query.get_or_404(url_id)
     if not url_entry.monitoring:
         url_entry.monitoring = True
         db.session.commit()
+        print(f"[THREAD] Launching monitor for URL ID: {url_id}")  # ADD THIS
         thread = threading.Thread(target=monitor_website, args=(url_entry.link, url_id, url_entry.interval), daemon=True)
         monitoring_threads[url_id] = thread
         thread.start()
     return redirect('/')
+
 
 @app.route('/stop/<int:url_id>')
 def stop_monitoring(url_id):
