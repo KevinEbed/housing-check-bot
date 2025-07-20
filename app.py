@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timezone
 import requests
 import smtplib
 from email.mime.text import MIMEText
@@ -28,7 +28,7 @@ class URL(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     address = db.Column(db.String(2083), nullable=False)
     interval = db.Column(db.Integer, default=60)
-    last_checked = db.Column(db.DateTime, nullable=True)
+    last_checked = db.Column(db.DateTime(timezone=True), nullable=True)
     status = db.Column(db.String(20), nullable=True)
     content_hash = db.Column(db.String(64), nullable=True)
 
@@ -76,7 +76,7 @@ def monitor_websites():
                     else:
                         url.status = "Unchanged"
 
-                    url.last_checked = datetime.utcnow()
+                    url.last_checked = datetime.now(timezone.utc)
                     db.session.commit()
                 except Exception as e:
                     url.status = "Error"
