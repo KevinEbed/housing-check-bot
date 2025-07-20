@@ -259,6 +259,14 @@ def serve_screenshot(filename):
         print(f"[ERROR] Failed to serve screenshot: {e}")
         return "Screenshot not found", 404
 
+# Debug route to test static file serving
+@app.route('/test-static')
+def test_static():
+    try:
+        return send_from_directory(app.static_folder, 'style.css')
+    except Exception as e:
+        return f"Static file error: {str(e)}", 500
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
