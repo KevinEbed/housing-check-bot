@@ -1,12 +1,16 @@
 FROM python:3.10
 
-# Install system dependencies for Pillow and Chromium
+# Install system dependencies for Pillow, Selenium, and others
 RUN apt-get update && apt-get install -y \
     chromium \
     chromium-driver \
     libjpeg-dev \
     zlib1g-dev \
     libpng-dev \
+    libwebp-dev \
+    libfreetype6-dev \
+    libopenjp2-7-dev \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
