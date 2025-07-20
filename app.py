@@ -46,7 +46,7 @@ missing_vars = [name for name, val in [
 if missing_vars:
     raise ValueError(f"Missing environment variables: {', '.join(missing_vars)}")
 
-SCREENSHOTS_DIR = "/app/screenshots"  # Adjusted for Railway
+SCREENSHOTS_DIR = "/app/screenshots"
 os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 
 class URL(db.Model):
@@ -74,7 +74,7 @@ def take_screenshot(url, max_retries=3):
             driver = webdriver.Chrome(service=service, options=chrome_options)
             driver.set_window_size(1280, 720)
             driver.get(url)
-            time.sleep(5)  # Increased wait time
+            time.sleep(5)
             timestamp = int(time.time())
             screenshot_path = get_screenshot_filename(url, f"_{timestamp}")
             driver.save_screenshot(screenshot_path)
@@ -88,7 +88,7 @@ def take_screenshot(url, max_retries=3):
         except Exception as e:
             print(f"[ERROR] Screenshot attempt {attempt + 1}/{max_retries} failed for {url}: {e}")
             if attempt < max_retries - 1:
-                time.sleep(2)  # Wait before retry
+                time.sleep(2)
             continue
     print(f"[ERROR] All {max_retries} attempts failed for {url}")
     return None
@@ -143,7 +143,7 @@ def monitor_websites():
                     last_time = last_check.get(url_obj.id, 0)
                     if now - last_time >= url_obj.interval:
                         try:
-                            response = requests.get(url_obj.url, timeout=10)  # Increased timeout
+                            response = requests.get(url_obj.url, timeout=10)
                             status = "Up" if response.status_code == 200 else f"Down ({response.status_code})"
                         except Exception as e:
                             print(f"[ERROR] {url_obj.url} unreachable: {e}")
@@ -151,13 +151,16 @@ def monitor_websites():
 
                         new_shot = take_screenshot(url_obj.url)
                         visual_change = False
+                        mse_value = 0.0
                         if new_shot and url_obj.last_screenshot and os.path.exists(url_obj.last_screenshot):
                             visual_change = compare_screenshots(url_obj.last_screenshot, new_shot)
+                            mse_value = np.mean((np.array(Image.open(url_obj.last_screenshot).convert("RGB").resize((1280, 720))) - 
+                                              np.array(Image.open(new_shot).convert("RGB").resize((1280, 720)))) ** 2) / (255 ** 2)
 
-                        # Temporary debug: notify on every check
+                        # Debug notification with screenshot comparison
                         alert = f"URL: {url_obj.url}\nStatus: {status}\nTime: {datetime.utcnow()}"
                         if visual_change:
-                            alert += "\nVisual change detected!"
+                            alert += f"\nVisual change detected! MSE: {mse_value:.4f}"
                         send_email("Website Status Debug", alert)
                         send_telegram(alert)
 
@@ -185,7 +188,7 @@ def monitor_websites():
                 time.sleep(sleep_time)
             except Exception as e:
                 print(f"[ERROR] Monitor thread error: {e}")
-                time.sleep(60)  # Retry after 60 seconds
+                time.sleep(60)
 
 @app.route('/')
 def index():
