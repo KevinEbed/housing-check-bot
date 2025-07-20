@@ -1,37 +1,40 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>URL Monitor</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>Website Uptime Monitor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-    <div class="container">
-        <h1>🌐 Website Uptime Monitor</h1>
-        <form action="/add" method="POST" class="form">
-            <input type="url" name="url" placeholder="Enter URL (e.g., https://example.com)" required>
-            <button type="submit">Add URL</button>
-        </form>
-        <table>
-            <thead>
-                <tr>
-                    <th>URL</th>
-                    <th>Status</th>
-                    <th>Created</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for url in urls %}
-                <tr>
-                    <td>{{ url.url }}</td>
-                    <td class="{{ 'up' if url.status == 'UP' else 'down' }}">{{ url.status or 'Unknown' }}</td>
-                    <td>{{ url.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                    <td><a href="/delete/{{ url.id }}" class="delete-btn">🗑️</a></td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+    <h1>🌐 Website Uptime Monitor</h1>
+    <form action="/add" method="POST">
+        <input type="text" name="url" placeholder="Enter URL (e.g., https://example.com)" required>
+        <button type="submit">Add URL</button>
+    </form>
+
+    <table>
+        <thead>
+            <tr>
+                <th>URL</th>
+                <th>Status</th>
+                <th>Last Checked</th>
+                <th>Monitoring</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for url in urls %}
+            <tr>
+                <td>{{ url.url }}</td>
+                <td>{{ url.status or "Unknown" }}</td>
+                <td>{{ url.last_checked.strftime('%Y-%m-%d %H:%M:%S') if url.last_checked else 'Never' }}</td>
+                <td>{{ "Yes" if url.is_active else "No" }}</td>
+                <td>
+                    <a href="/toggle/{{ url.id }}">{{ "Stop" if url.is_active else "Start" }}</a> |
+                    <a href="/delete/{{ url.id }}">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </body>
 </html>
