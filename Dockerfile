@@ -23,6 +23,9 @@ WORKDIR /app
 COPY . .
 COPY static/ /app/static/
 
+# Remove any existing cache to force fresh build
+RUN rm -rf __pycache__ *.pyc
+
 # Upgrade pip and install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt -v
