@@ -1,10 +1,8 @@
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
-import requests, threading, os, smtplib
+import requests, threading, os, time
 from dotenv import load_dotenv
-from email.mime.text import MIMEText
-import time
 
 load_dotenv()
 
@@ -19,17 +17,29 @@ EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# Database Model
+# DB Model
 class URL(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     url = db.Column(db.String(500), nullable=False)
     status = db.Column(db.String(10), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_checked = db.Column(db.DateTime, nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
 
+# Telegram Notification
+def send_telegram_message(message):
+    if TELEGRAM_TOKEN and TELEGRAM_CHAT_ID:
+        try:
+            url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+            requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": message})
+        except Exception as e:
+            print("Telegram Error:", e)
+
+# Monitor Thread
 def monitor_websites():
     while True:
         with app.app_context():
-            urls = URL.query.all()
+            urls = URL.query.filter_by(is_active=True).all()
             for url_obj in urls:
                 try:
                     response = requests.get(url_obj.url, timeout=5)
@@ -38,20 +48,12 @@ def monitor_websites():
                     new_status = 'DOWN'
 
                 if url_obj.status != new_status:
-                    send_telegram_message(f"🔔 {url_obj.url} is now {new_status}")
+                    send_telegram_message(f"{url_obj.url} is now {new_status}")
                     url_obj.status = new_status
-                    db.session.commit()
-        time.sleep(60)
 
-def send_telegram_message(message):
-    if TELEGRAM_TOKEN and TELEGRAM_CHAT_ID:
-        try:
-            requests.post(
-                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-                json={"chat_id": TELEGRAM_CHAT_ID, "text": message}
-            )
-        except Exception as e:
-            print("Telegram Error:", e)
+                url_obj.last_checked = datetime.utcnow()
+                db.session.commit()
+        time.sleep(60)
 
 @app.route('/')
 def index():
@@ -71,6 +73,13 @@ def add_url():
 def delete_url(url_id):
     url_obj = URL.query.get_or_404(url_id)
     db.session.delete(url_obj)
+    db.session.commit()
+    return redirect('/')
+
+@app.route('/toggle/<int:url_id>')
+def toggle_url(url_id):
+    url_obj = URL.query.get_or_404(url_id)
+    url_obj.is_active = not url_obj.is_active
     db.session.commit()
     return redirect('/')
 
