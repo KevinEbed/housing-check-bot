@@ -1,1 +1,8 @@
-flask>=2.3.0 flask_sqlalchemy>=3.0.0 requests>=2.31.0 python-dotenv>=1.0.0 selenium>=4.15.0 pillow>=10.0.0 webdriver-manager>=4.0.0 gunicorn>=22.0.0
+flask==2.3.3
+flask_sqlalchemy==3.0.5
+requests==2.31.0
+python-dotenv==1.0.0
+selenium==4.15.2
+pillow==10.0.1
+webdriver-manager==4.0.1
+gunicorn==22.0.0
