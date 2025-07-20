@@ -97,65 +97,68 @@ def images_different(img1_path, img2_path):
         return False
 
 def monitor_website(url, url_id, interval):
-    print(f"👀 Monitoring {url}")
+    print(f"[MONITORING STARTED] Monitoring: {url} every {interval} seconds")
     baseline_img = f"screenshots/{url_id}_baseline.png"
     os.makedirs("screenshots", exist_ok=True)
 
-    # Initial fetch + screenshot
+    # Initial fetch and screenshot
     try:
-        resp = requests.get(url)
+        resp = requests.get(url, timeout=10)
         hash_baseline = hashlib.md5(resp.content).hexdigest()
+        print(f"[INIT] Initial hash for {url}: {hash_baseline}")
         if not take_screenshot(url, baseline_img):
             print(f"[ERROR] Couldn't capture baseline screenshot for {url}")
             return
+        print(f"[INIT] Baseline screenshot saved at {baseline_img}")
     except Exception as e:
-        print(f"[ERROR] Init fetch error: {e}")
+        print(f"[ERROR] Init fetch or screenshot failed for {url}: {e}")
         return
 
-    # Ensure baseline exists
     if not os.path.isfile(baseline_img):
-        print(f"[ERROR] Baseline screenshot missing at {baseline_img}")
+        print(f"[ERROR] Baseline screenshot file missing: {baseline_img}")
         return
 
     while True:
-        # Use modern Session.get API
         with app.app_context():
             url_obj = db.session.get(URL, url_id)
             if not url_obj or not url_obj.monitoring:
-                print(f"[INFO] Stopped monitoring {url}")
+                print(f"[INFO] Monitoring stopped for {url}")
                 break
 
         time.sleep(interval)
-        try:
-            # HTML hash check
-            resp = requests.get(url)
-            current_hash = hashlib.md5(resp.content).hexdigest()
 
-            # Visual check
+        try:
+            resp = requests.get(url, timeout=10)
+            current_hash = hashlib.md5(resp.content).hexdigest()
+            print(f"[CHECK] Current hash for {url}: {current_hash}")
+
             current_img = f"screenshots/{url_id}_current.png"
             if not take_screenshot(url, current_img):
-                print(f"[ERROR] Failed current screenshot for {url}")
+                print(f"[ERROR] Couldn't take current screenshot for {url}")
                 continue
 
-            # Confirm both exist
-            if not (os.path.isfile(baseline_img) and os.path.isfile(current_img)):
-                print(f"[ERROR] Screenshot files missing: {baseline_img}, {current_img}")
+            if not (os.path.exists(baseline_img) and os.path.exists(current_img)):
+                print(f"[ERROR] Missing screenshot(s): {baseline_img}, {current_img}")
                 continue
 
             visual_diff = images_different(baseline_img, current_img)
+            print(f"[CHECK] Visual difference detected? {visual_diff}")
 
             if current_hash != hash_baseline or visual_diff:
-                msg = f"🔔 Change on: {url} at {datetime.now():%Y-%m-%d %H:%M:%S}"
+                msg = f"🔔 Change detected on: {url} at {datetime.now():%Y-%m-%d %H:%M:%S}"
+                print(f"[ALERT] {msg}")
                 send_email("Website Changed", msg)
                 send_telegram(msg)
 
-                # update baselines
+                # Update baseline
                 hash_baseline = current_hash
                 os.replace(current_img, baseline_img)
+                print("[INFO] Baseline updated with current screenshot.")
             else:
-                print(f"[DEBUG] No change detected for {url}")
+                print(f"[DEBUG] No change for {url}.")
         except Exception as e:
-            print(f"[ERROR] During monitoring of {url}: {e}")
+            print(f"[ERROR] Monitoring loop error for {url}: {e}")
+
 
 @app.route('/', methods=['GET', 'POST'])
 def home():
