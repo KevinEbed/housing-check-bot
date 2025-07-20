@@ -98,7 +98,7 @@ def images_different(img1_path, img2_path):
         return False
 
 def monitor_website(url, url_id, interval):
-    print(f"[MONITORING STARTED] Monitoring: {url} every {interval} seconds")
+    print(f"[MONITORING STARTED] Monitoring thread launched for {url}")
     baseline_img = f"screenshots/{url_id}_baseline.png"
     os.makedirs("screenshots", exist_ok=True)
 
@@ -174,17 +174,30 @@ def home():
     return render_template("index.html", urls=urls)
 
 @app.route('/start/<int:url_id>')
-@app.route('/start/<int:url_id>')
 def start_monitoring(url_id):
     url_entry = URL.query.get_or_404(url_id)
     if not url_entry.monitoring:
         url_entry.monitoring = True
         db.session.commit()
-        print(f"[THREAD] Launching monitor for URL ID: {url_id}")  # ADD THIS
-        thread = threading.Thread(target=monitor_website, args=(url_entry.link, url_id, url_entry.interval), daemon=True)
-        monitoring_threads[url_id] = thread
-        thread.start()
+
+        print(f"[THREAD] Preparing to launch monitor for URL ID: {url_id}")
+        print(f"[THREAD] URL: {url_entry.link}, Interval: {url_entry.interval}")
+
+        try:
+            thread = threading.Thread(
+                target=monitor_website,
+                args=(url_entry.link, url_id, url_entry.interval),
+                daemon=True
+            )
+            monitoring_threads[url_id] = thread
+            thread.start()
+            print(f"[THREAD] Thread started for URL ID: {url_id}")
+        except Exception as e:
+            print(f"[ERROR] Failed to start thread: {e}")
+    else:
+        print(f"[THREAD] Monitoring already active for URL ID: {url_id}")
     return redirect('/')
+
 
 
 @app.route('/stop/<int:url_id>')
