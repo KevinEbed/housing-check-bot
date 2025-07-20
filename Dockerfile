@@ -21,7 +21,8 @@ WORKDIR /app
 
 # Copy project files explicitly, ensuring static directory is included
 COPY . .
-COPY static/ /app/static/
+# Only copy static if it exists, otherwise create an empty directory
+RUN if [ -d "static" ]; then cp -r static/ /app/static/; else mkdir -p /app/static/; fi
 
 # Remove any existing cache to force fresh build
 RUN rm -rf __pycache__ *.pyc
