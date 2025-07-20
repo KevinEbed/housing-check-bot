@@ -37,10 +37,12 @@ def send_telegram_message(message):
 
 # Monitor Thread
 def monitor_websites():
+    print("[Monitor] Started monitoring websites...")
     while True:
         with app.app_context():
             urls = URL.query.filter_by(is_active=True).all()
             for url_obj in urls:
+                print(f"[Monitor] Checking {url_obj.url}")
                 try:
                     response = requests.get(url_obj.url, timeout=5)
                     new_status = 'UP' if response.status_code == 200 else 'DOWN'
@@ -88,3 +90,4 @@ if __name__ == '__main__':
         db.create_all()
     threading.Thread(target=monitor_websites, daemon=True).start()
     app.run(debug=False, host='0.0.0.0', port=8080)
+
