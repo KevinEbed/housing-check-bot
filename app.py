@@ -99,7 +99,8 @@ def delete_url(url_id):
         db.session.commit()
     return redirect('/')
 
-if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-    app.run(debug=True, port=8080)
+if __name__ == "__main__":
+    import os
+    port = int(os.environ.get("PORT", 8080))  # fallback to 8080 for local
+    app.run(host="0.0.0.0", port=port, debug=True)
+
