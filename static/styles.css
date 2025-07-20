@@ -1,85 +1,80 @@
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: #f4f6f8;
-  margin: 0;
-  padding: 20px;
-  color: #333;
+    font-family: 'Segoe UI', sans-serif;
+    background-color: #f9f9fb;
+    color: #333;
+    padding: 20px;
 }
 
 .container {
-  max-width: 800px;
-  margin: auto;
-  background: #fff;
-  padding: 30px;
-  border-radius: 12px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    max-width: 900px;
+    margin: auto;
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.05);
 }
 
-h1, h2 {
-  text-align: center;
-  color: #2c3e50;
+h1 {
+    text-align: center;
+    color: #007acc;
 }
 
-form.url-form {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 30px;
-  justify-content: center;
+.form {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
 }
 
-input[type="text"], input[type="number"] {
-  padding: 10px;
-  font-size: 16px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  width: 250px;
+input[type="text"] {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
 }
 
 button {
-  padding: 10px 20px;
-  font-size: 16px;
-  background: #3498db;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
+    padding: 10px 20px;
+    background-color: #007acc;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
 }
 
 button:hover {
-  background: #2980b9;
+    background-color: #005a9e;
 }
 
 table {
-  width: 100%;
-  border-collapse: collapse;
-  text-align: center;
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
 }
 
 th, td {
-  padding: 12px;
-  border-bottom: 1px solid #ddd;
+    padding: 12px;
+    border-bottom: 1px solid #e0e0e0;
+    text-align: left;
 }
 
 th {
-  background: #ecf0f1;
+    background-color: #f0f4f8;
 }
 
-td a {
-  color: #2980b9;
-  text-decoration: none;
+.up {
+    color: green;
+    font-weight: bold;
 }
 
-.changed {
-  color: #e74c3c;
-  font-weight: bold;
+.down {
+    color: red;
+    font-weight: bold;
 }
 
-.unchanged {
-  color: #2ecc71;
-  font-weight: bold;
+button.delete {
+    background-color: #dc3545;
 }
 
-.error {
-  color: #f39c12;
-  font-weight: bold;
+button.delete:hover {
+    background-color: #c82333;
 }
