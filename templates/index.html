@@ -4,32 +4,67 @@
     <meta charset="UTF-8">
     <title>Website Monitor</title>
     <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        form {
+            margin: 20px 0;
+            text-align: center;
+        }
+        input[type="text"], input[type="number"] {
+            padding: 8px;
+            margin-right: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            padding: 8px 15px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 4px;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+        }
+        button.stop {
+            background-color: #f44336;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
         table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         th, td {
             border: 1px solid #ddd;
-            padding: 8px;
+            padding: 12px;
             text-align: left;
         }
         th {
-            background-color: #f2f2f2;
+            background-color: #4CAF50;
+            color: white;
+        }
+        td {
+            background-color: #fff;
         }
         .screenshot {
             max-width: 200px;
             max-height: 150px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
         }
-        form {
-            margin-top: 20px;
-        }
-        input[type="text"] {
-            padding: 5px;
-            margin-right: 10px;
-        }
-        button {
-            padding: 5px 10px;
+        .no-urls {
+            text-align: center;
+            color: #666;
         }
     </style>
 </head>
@@ -37,6 +72,7 @@
     <h1>Website Monitor</h1>
     <form method="POST" action="/add">
         <input type="text" name="url" placeholder="Enter URL" required>
+        <input type="number" name="interval" min="1" value="60" required>
         <button type="submit">Add URL</button>
     </form>
     {% if urls %}
@@ -65,14 +101,18 @@
                         {% endif %}
                     </td>
                     <td>
-                        <a href="/toggle/{{ url.id }}">Toggle</a> |
+                        {% if url.is_active %}
+                            <a href="/stop/{{ url.id }}"><button class="stop">Stop</button></a> |
+                        {% else %}
+                            <a href="/start/{{ url.id }}"><button>Start</button></a> |
+                        {% endif %}
                         <a href="/delete/{{ url.id }}" onclick="return confirm('Are you sure?')">Delete</a>
                     </td>
                 </tr>
             {% endfor %}
         </table>
     {% else %}
-        <p>No URLs monitored yet.</p>
+        <p class="no-urls">No URLs monitored yet.</p>
     {% endif %}
 </body>
 </html>
