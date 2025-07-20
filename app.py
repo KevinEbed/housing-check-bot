@@ -21,6 +21,7 @@ import numpy as np
 from apscheduler.schedulers.background import BackgroundScheduler
 
 scheduler = BackgroundScheduler()
+scheduler.add_job(func=check_websites, trigger="interval", seconds=60)
 scheduler.start()
 
 # Load environment variables
