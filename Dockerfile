@@ -19,8 +19,9 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Copy project files explicitly to ensure static directory is included
+# Copy project files explicitly, ensuring static directory is included
 COPY . .
+COPY static/ /app/static/
 
 # Upgrade pip and install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip
