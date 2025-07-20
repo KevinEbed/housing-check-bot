@@ -6,4 +6,4 @@ selenium
 opencv-python-headless
 Pillow
 webdriver-manager
-
+gunicorn
