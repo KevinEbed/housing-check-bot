@@ -1,0 +1,8 @@
+flask
+flask_sqlalchemy
+requests
+python-dotenv
+selenium
+opencv-python
+Pillow
+webdriver-manager
