@@ -31,11 +31,18 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 # Verify environment variables
-if not all([EMAIL_SENDER, EMAIL_PASSWORD, EMAIL_RECEIVER, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]):
-    raise ValueError("One or more environment variables are missing. Check your .env file.")
+missing_vars = [var for var, value in [
+    ("EMAIL_SENDER", EMAIL_SENDER),
+    ("EMAIL_PASSWORD", EMAIL_PASSWORD),
+    ("EMAIL_RECEIVER", EMAIL_RECEIVER),
+    ("TELEGRAM_TOKEN", TELEGRAM_TOKEN),
+    ("TELEGRAM_CHAT_ID", TELEGRAM_CHAT_ID)
+] if not value]
+if missing_vars:
+    raise ValueError(f"Missing environment variables: {', '.join(missing_vars)}")
 
 # Create screenshots directory
-SCREENSHOTS_DIR = "screenshots"
+SCREENSHOTS_DIR = "/app/screenshots"  # Use /app/screenshots for Railway volume
 if not os.path.exists(SCREENSHOTS_DIR):
     os.makedirs(SCREENSHOTS_DIR)
 
