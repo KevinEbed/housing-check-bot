@@ -1,10 +1,12 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, request, redirect, render_template_string
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
-import threading
 import requests
+import hashlib
 import os
 import smtplib
+import threading
+import time
+from datetime import datetime
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
 
@@ -31,18 +33,28 @@ class URL(db.Model):
 
 def send_email(subject, body):
     msg = MIMEText(body)
-    msg['Subject'] = subject
     msg['From'] = EMAIL_SENDER
     msg['To'] = EMAIL_RECEIVER
-
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-        server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-        server.sendmail(EMAIL_SENDER, EMAIL_RECEIVER, msg.as_string())
+    msg['Subject'] = subject
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+            server.send_message(msg)
+        print("[INFO] Email sent.")
+    except Exception as e:
+        print(f"[ERROR] Failed to send email: {e}")
 
 def send_telegram(message):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {'chat_id': TELEGRAM_CHAT_ID, 'text': message}
-    requests.post(url, data=payload)
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": message
+        }
+        requests.post(url, data=payload)
+        print("[INFO] Telegram message sent.")
+    except Exception as e:
+        print(f"[ERROR] Failed to send Telegram message: {e}")
 
 def monitor_websites():
     with app.app_context():
