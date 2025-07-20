@@ -1,0 +1,19 @@
+Python
+
+pycache/ *.py[cod] *.pyo *.pyd .Python env/ venv/ *.egg-info/ dist/ build/
+
+SQLite
+
+urls.db
+
+Screenshots
+
+screenshots/
+
+Environment
+
+.env
+
+IDE
+
+.vscode/ .idea/
