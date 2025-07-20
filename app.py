@@ -1,82 +1,105 @@
 from flask import Flask, render_template, request, redirect
-from apscheduler.schedulers.background import BackgroundScheduler
-import requests, hashlib, os
-from dotenv import load_dotenv
-from datetime import datetime
-import smtplib
+from flask_sqlalchemy import SQLAlchemy
+import requests, threading, time, os, smtplib
 from email.mime.text import MIMEText
+from dotenv import load_dotenv
 
-# Load environment variables
+# Load .env variables
 load_dotenv()
+
 EMAIL_SENDER = os.getenv("EMAIL_SENDER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
+
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 app = Flask(__name__)
-scheduler = BackgroundScheduler()
-scheduler.start()
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///urls.db'
+db = SQLAlchemy(app)
 
-# Store URL and its hash
-urls = {}
+# DB Model
+class URL(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    link = db.Column(db.String(500), nullable=False)
+    interval = db.Column(db.Integer, nullable=False)
+    monitoring = db.Column(db.Boolean, default=False)
 
-def send_email(subject, body):
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = EMAIL_SENDER
-    msg["To"] = EMAIL_RECEIVER
+# Monitor function
+def monitor_url(url_id):
+    url = URL.query.get(url_id)
+    while url and url.monitoring:
+        try:
+            response = requests.get(url.link, timeout=10)
+            if response.status_code != 200:
+                send_alert(f"⚠️ {url.link} is DOWN. Status code: {response.status_code}")
+        except Exception as e:
+            send_alert(f"🚨 {url.link} is UNREACHABLE.\nError: {str(e)}")
+        time.sleep(url.interval)
+        url = URL.query.get(url_id)  # Refresh from DB
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-        server.sendmail(EMAIL_SENDER, EMAIL_RECEIVER, msg.as_string())
-
-def send_telegram(message):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    data = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
-    requests.post(url, data=data)
-
-def monitor_website(url_id):
-    url = urls.get(url_id)
-    if not url:
-        return
-
+# Alert function
+def send_alert(message):
+    # Send Telegram
     try:
-        response = requests.get(url["link"], timeout=10)
-        new_hash = hashlib.sha256(response.content).hexdigest()
+        telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        requests.post(telegram_url, data={"chat_id": TELEGRAM_CHAT_ID, "text": message})
+    except:
+        pass
 
-        if url["hash"] and new_hash != url["hash"]:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            subject = f"Website Updated: {url['link']}"
-            body = f"Change detected at {timestamp}."
-            send_email(subject, body)
-            send_telegram(subject)
+    # Send Email
+    try:
+        msg = MIMEText(message)
+        msg['Subject'] = "🔔 Website Monitor Alert"
+        msg['From'] = EMAIL_SENDER
+        msg['To'] = EMAIL_RECEIVER
 
-        url["hash"] = new_hash
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+            server.send_message(msg)
+    except:
+        pass
 
-    except Exception as e:
-        print(f"Error monitoring {url['link']}: {e}")
-
-@app.route("/", methods=["GET", "POST"])
+# Routes
+@app.route('/', methods=['GET', 'POST'])
 def index():
-    if request.method == "POST":
-        link = request.form.get("link")
-        interval = int(request.form.get("interval", 60))
-        url_id = len(urls) + 1
-        urls[url_id] = {"link": link, "hash": None}
-        scheduler.add_job(lambda: monitor_website(url_id), "interval", seconds=interval, id=str(url_id))
-        return redirect("/")
+    if request.method == 'POST':
+        new_url = URL(
+            link=request.form['link'],
+            interval=int(request.form['interval']),
+            monitoring=False
+        )
+        db.session.add(new_url)
+        db.session.commit()
+    urls = URL.query.all()
+    return render_template('index.html', urls=urls)
 
-    return render_template("index.html", urls=urls)
+@app.route('/start/<int:url_id>')
+def start_monitoring(url_id):
+    url = URL.query.get(url_id)
+    if url and not url.monitoring:
+        url.monitoring = True
+        db.session.commit()
+        threading.Thread(target=monitor_url, args=(url_id,), daemon=True).start()
+    return redirect('/')
 
-@app.route("/stop/<int:url_id>")
-def stop(url_id):
-    try:
-        scheduler.remove_job(str(url_id))
-        urls.pop(url_id, None)
-    except Exception as e:
-        print(f"Failed to stop monitoring: {e}")
-    return redirect("/")
+@app.route('/stop/<int:url_id>')
+def stop_monitoring(url_id):
+    url = URL.query.get(url_id)
+    if url:
+        url.monitoring = False
+        db.session.commit()
+    return redirect('/')
 
-if __name__ == "__main__":
-    app.run(debug=True, port=8080, host="0.0.0.0")
+@app.route('/delete/<int:url_id>')
+def delete_url(url_id):
+    url = URL.query.get(url_id)
+    if url:
+        db.session.delete(url)
+        db.session.commit()
+    return redirect('/')
+
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True, port=8080)
