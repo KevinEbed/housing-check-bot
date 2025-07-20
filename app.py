@@ -17,7 +17,7 @@ from PIL import Image
 import hashlib
 import numpy as np
 
-# Load .env variables
+# Load environment variables
 load_dotenv()
 
 app = Flask(__name__, static_folder='static')
@@ -31,26 +31,21 @@ EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# Validate env variables
-missing_vars = [var for var, value in [
-    ("EMAIL_SENDER", EMAIL_SENDER),
-    ("EMAIL_PASSWORD", EMAIL_PASSWORD),
-    ("EMAIL_RECEIVER", EMAIL_RECEIVER),
-    ("TELEGRAM_TOKEN", TELEGRAM_TOKEN),
-    ("TELEGRAM_CHAT_ID", TELEGRAM_CHAT_ID)
-] if not value]
-if missing_vars:
-    raise ValueError(f"Missing environment variables: {', '.join(missing_vars)}")
+required_vars = [("EMAIL_SENDER", EMAIL_SENDER), ("EMAIL_PASSWORD", EMAIL_PASSWORD),
+                 ("EMAIL_RECEIVER", EMAIL_RECEIVER), ("TELEGRAM_TOKEN", TELEGRAM_TOKEN),
+                 ("TELEGRAM_CHAT_ID", TELEGRAM_CHAT_ID)]
+missing = [name for name, val in required_vars if not val]
+if missing:
+    raise ValueError(f"Missing environment variables: {', '.join(missing)}")
 
 SCREENSHOTS_DIR = "screenshots"
-if not os.path.exists(SCREENSHOTS_DIR):
-    os.makedirs(SCREENSHOTS_DIR)
+os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 
 class URL(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     url = db.Column(db.String(255), nullable=False)
     is_active = db.Column(db.Boolean, default=True)
-    interval = db.Column(db.Integer, default=60)  # seconds
+    interval = db.Column(db.Integer, default=60)
     last_checked = db.Column(db.DateTime)
     status = db.Column(db.String(20))
     last_screenshot = db.Column(db.String(255))
@@ -75,6 +70,7 @@ def take_screenshot(url):
         screenshot_path = get_screenshot_filename(url, f"_{timestamp}")
         driver.save_screenshot(screenshot_path)
         driver.quit()
+        print(f"[INFO] Screenshot saved: {screenshot_path}")
         return screenshot_path
     except Exception as e:
         print(f"[ERROR] Screenshot failed for {url}: {e}")
@@ -82,30 +78,31 @@ def take_screenshot(url):
 
 def compare_screenshots(img1_path, img2_path, threshold=0.1):
     try:
+        print(f"[DEBUG] Comparing {img1_path} vs {img2_path}")
         img1 = Image.open(img1_path).convert("RGB").resize((1280, 720))
         img2 = Image.open(img2_path).convert("RGB").resize((1280, 720))
         arr1 = np.array(img1)
         arr2 = np.array(img2)
         mse = np.mean((arr1 - arr2) ** 2)
         difference = mse / (255 ** 2)
-        print(f"[INFO] MSE: {mse:.2f}, Normalized difference: {difference:.4f}")
+        print(f"[INFO] MSE: {mse:.2f}, Normalized: {difference:.4f}")
         return difference > threshold
     except Exception as e:
-        print(f"[ERROR] Failed to compare screenshots: {e}")
+        print(f"[ERROR] Image comparison failed: {e}")
         return False
 
 def send_email(subject, body):
-    msg = MIMEText(body)
-    msg['From'] = EMAIL_SENDER
-    msg['To'] = EMAIL_RECEIVER
-    msg['Subject'] = subject
     try:
+        msg = MIMEText(body)
+        msg['From'] = EMAIL_SENDER
+        msg['To'] = EMAIL_RECEIVER
+        msg['Subject'] = subject
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(EMAIL_SENDER, EMAIL_PASSWORD)
             server.send_message(msg)
         print("[INFO] Email sent.")
     except Exception as e:
-        print(f"[ERROR] Email failed: {e}")
+        print(f"[ERROR] Failed to send email: {e}")
 
 def send_telegram(message):
     try:
@@ -113,64 +110,65 @@ def send_telegram(message):
                       data={"chat_id": TELEGRAM_CHAT_ID, "text": message})
         print("[INFO] Telegram message sent.")
     except Exception as e:
-        print(f"[ERROR] Telegram failed: {e}")
+        print(f"[ERROR] Failed to send Telegram message: {e}")
 
 def monitor_websites():
     with app.app_context():
         last_check = {}
-        print("[INFO] Monitor thread started")
+        print("[INFO] Monitoring thread started.")
         while True:
             try:
                 urls = URL.query.all()
-                current_time = time.time()
+                now = time.time()
                 for url_obj in urls:
-                    if url_obj.is_active:
-                        last_checked_time = last_check.get(url_obj.id, 0)
-                        if current_time - last_checked_time >= url_obj.interval:
-                            try:
-                                response = requests.get(url_obj.url, timeout=5)
-                                status = "Up" if response.status_code == 200 else f"Down ({response.status_code})"
-                            except Exception as e:
-                                status = "Down"
-                                print(f"[ERROR] Failed to fetch {url_obj.url}: {e}")
+                    if not url_obj.is_active:
+                        continue
+                    last_time = last_check.get(url_obj.id, 0)
+                    if now - last_time >= url_obj.interval:
+                        try:
+                            response = requests.get(url_obj.url, timeout=5)
+                            status = "Up" if response.status_code == 200 else f"Down ({response.status_code})"
+                        except Exception as e:
+                            print(f"[ERROR] {url_obj.url} unreachable: {e}")
+                            status = "Down"
 
-                            new_screenshot = take_screenshot(url_obj.url)
-                            visual_change = False
-                            if new_screenshot and url_obj.last_screenshot and os.path.exists(url_obj.last_screenshot):
-                                visual_change = compare_screenshots(url_obj.last_screenshot, new_screenshot)
+                        new_shot = take_screenshot(url_obj.url)
+                        visual_change = False
+                        if new_shot and url_obj.last_screenshot and os.path.exists(url_obj.last_screenshot):
+                            visual_change = compare_screenshots(url_obj.last_screenshot, new_shot)
 
-                            if (url_obj.status != status or visual_change) and status != "Unknown":
-                                alert = f"URL: {url_obj.url}\nStatus: {status}"
-                                if visual_change:
-                                    alert += "\nVisual change detected!"
-                                send_email("Website Status Alert", alert)
-                                send_telegram(alert)
+                        if (url_obj.status != status or visual_change) and status != "Unknown":
+                            alert = f"URL: {url_obj.url}\nStatus: {status}"
+                            if visual_change:
+                                alert += "\nVisual change detected!"
+                            send_email("Website Status Alert", alert)
+                            send_telegram(alert)
 
-                            if new_screenshot:
-                                old_screenshot = url_obj.last_screenshot
-                                url_obj.last_screenshot = new_screenshot
-                                if old_screenshot and os.path.exists(old_screenshot):
-                                    try:
-                                        os.remove(old_screenshot)
-                                    except Exception as e:
-                                        print(f"[ERROR] Failed to delete old screenshot: {e}")
+                        if new_shot:
+                            old = url_obj.last_screenshot
+                            url_obj.last_screenshot = new_shot
+                            if old and os.path.exists(old):
+                                try:
+                                    os.remove(old)
+                                except Exception as e:
+                                    print(f"[ERROR] Could not delete old screenshot: {e}")
 
-                            url_obj.status = status
-                            url_obj.last_checked = datetime.utcnow()
-                            try:
-                                db.session.commit()
-                                last_check[url_obj.id] = current_time
-                                print(f"[INFO] Checked {url_obj.url} at {url_obj.last_checked}")
-                            except Exception as e:
-                                db.session.rollback()
-                                print(f"[ERROR] DB commit failed: {e}")
+                        url_obj.status = status
+                        url_obj.last_checked = datetime.utcnow()
+                        try:
+                            db.session.commit()
+                            last_check[url_obj.id] = now
+                            print(f"[INFO] Checked {url_obj.url}")
+                        except Exception as e:
+                            db.session.rollback()
+                            print(f"[ERROR] Commit failed: {e}")
 
                 sleep_time = min([u.interval for u in urls if u.is_active] or [60])
-                print(f"[INFO] Sleeping {sleep_time}s")
+                print(f"[INFO] Sleeping for {sleep_time}s")
                 time.sleep(sleep_time)
 
             except Exception as e:
-                print(f"[ERROR] Monitor error: {e}")
+                print(f"[ERROR] Monitor thread error: {e}")
                 time.sleep(60)
 
 @app.route('/')
@@ -179,7 +177,7 @@ def index():
         urls = URL.query.all()
         return render_template('index.html', urls=urls)
     except Exception as e:
-        return f"[ERROR] Failed to load URLs: {e}", 500
+        return f"Error: {e}", 500
 
 @app.route('/add', methods=['POST'])
 def add():
@@ -195,7 +193,7 @@ def add():
         return redirect(url_for('index'))
     except Exception as e:
         db.session.rollback()
-        return f"Failed to add URL: {e}", 500
+        return f"Add failed: {e}", 500
 
 @app.route('/start/<int:url_id>')
 def start(url_id):
@@ -206,7 +204,7 @@ def start(url_id):
         return redirect(url_for('index'))
     except Exception as e:
         db.session.rollback()
-        return f"Failed to start URL: {e}", 500
+        return f"Start failed: {e}", 500
 
 @app.route('/stop/<int:url_id>')
 def stop(url_id):
@@ -217,37 +215,28 @@ def stop(url_id):
         return redirect(url_for('index'))
     except Exception as e:
         db.session.rollback()
-        return f"Failed to stop URL: {e}", 500
+        return f"Stop failed: {e}", 500
 
 @app.route('/delete/<int:url_id>')
 def delete(url_id):
     try:
         url_obj = URL.query.get_or_404(url_id)
         if url_obj.last_screenshot and os.path.exists(url_obj.last_screenshot):
-            try:
-                os.remove(url_obj.last_screenshot)
-            except Exception as e:
-                print(f"[ERROR] Could not delete screenshot: {e}")
+            os.remove(url_obj.last_screenshot)
         db.session.delete(url_obj)
         db.session.commit()
         return redirect(url_for('index'))
     except Exception as e:
         db.session.rollback()
-        return f"Failed to delete URL: {e}", 500
+        return f"Delete failed: {e}", 500
 
 @app.route('/screenshots/<path:filename>')
 def serve_screenshot(filename):
-    try:
-        return send_from_directory(SCREENSHOTS_DIR, filename)
-    except Exception as e:
-        return f"Screenshot not found: {e}", 404
+    return send_from_directory(SCREENSHOTS_DIR, filename)
 
 @app.route('/test-static')
 def test_static():
-    try:
-        return send_from_directory(app.static_folder, 'style.css')
-    except Exception as e:
-        return f"Static error: {e}", 500
+    return send_from_directory(app.static_folder, 'style.css')
 
 if __name__ == '__main__':
     with app.app_context():
