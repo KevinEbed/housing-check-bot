@@ -1,22 +1,22 @@
 body {
     font-family: 'Segoe UI', sans-serif;
-    background-color: #f9f9fb;
+    background: #f0f2f5;
     color: #333;
-    padding: 20px;
+    padding: 30px;
 }
 
 .container {
-    max-width: 900px;
+    max-width: 800px;
     margin: auto;
-    background: white;
-    padding: 2rem;
+    background: #fff;
+    padding: 25px;
     border-radius: 12px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.05);
+    box-shadow: 0 0 12px rgba(0,0,0,0.1);
 }
 
 h1 {
     text-align: center;
-    color: #007acc;
+    color: #0077cc;
 }
 
 .form {
@@ -25,7 +25,7 @@ h1 {
     margin-bottom: 20px;
 }
 
-input[type="text"] {
+input[type="url"] {
     flex: 1;
     padding: 10px;
     border: 1px solid #ccc;
@@ -33,32 +33,27 @@ input[type="text"] {
 }
 
 button {
-    padding: 10px 20px;
-    background-color: #007acc;
+    background: #0077cc;
     color: white;
     border: none;
+    padding: 10px 18px;
     border-radius: 6px;
     cursor: pointer;
 }
 
 button:hover {
-    background-color: #005a9e;
+    background: #005fa3;
 }
 
 table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 1rem;
 }
 
 th, td {
     padding: 12px;
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid #ccc;
     text-align: left;
-}
-
-th {
-    background-color: #f0f4f8;
 }
 
 .up {
@@ -71,10 +66,7 @@ th {
     font-weight: bold;
 }
 
-button.delete {
-    background-color: #dc3545;
-}
-
-button.delete:hover {
-    background-color: #c82333;
+.delete-btn {
+    color: red;
+    text-decoration: none;
 }
