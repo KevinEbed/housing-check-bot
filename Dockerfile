@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Copy project files
+# Copy project files explicitly to ensure static directory is included
 COPY . .
 
 # Upgrade pip and install Python dependencies
@@ -34,6 +34,7 @@ EXPOSE 8080
 
 # Set environment variable for Chrome
 ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROMEDRIVER_PATH=/usr/lib/chromium-browser/chromedriver
 
-# Run the app
+# Run the app with gunicorn
 CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:8080"]
