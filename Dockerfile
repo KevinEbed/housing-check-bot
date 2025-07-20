@@ -19,10 +19,8 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Copy project files explicitly, ensuring static directory is included
-COPY . .
-# Only copy static if it exists, otherwise create an empty directory
-RUN if [ -d "static" ]; then cp -r static/ /app/static/; else mkdir -p /app/static/; fi
+# Copy all files, including static directory
+COPY . /app/
 
 # Remove any existing cache to force fresh build
 RUN rm -rf __pycache__ *.pyc
