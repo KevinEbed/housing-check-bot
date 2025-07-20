@@ -6,8 +6,9 @@ import smtplib
 from email.mime.text import MIMEText
 import threading
 import os
-from dotenv import load_dotenv
+import hashlib
 import time
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -26,8 +27,13 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 class URL(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     address = db.Column(db.String(2083), nullable=False)
+    interval = db.Column(db.Integer, default=60)
     last_checked = db.Column(db.DateTime, nullable=True)
-    status = db.Column(db.String(10), nullable=True)
+    status = db.Column(db.String(20), nullable=True)
+    content_hash = db.Column(db.String(64), nullable=True)
+
+def get_hash(content):
+    return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
 def send_email(subject, body):
     try:
@@ -53,18 +59,38 @@ def send_telegram(message):
         print("Telegram failed:", e)
 
 def monitor_websites():
-    with app.app_context():  # Add this line
+    with app.app_context():
         while True:
             urls = URL.query.all()
-            # Your monitoring logic here
+            for url in urls:
+                try:
+                    response = requests.get(url.address, timeout=10)
+                    content = response.text
+                    new_hash = get_hash(content)
+
+                    if url.content_hash != new_hash:
+                        url.content_hash = new_hash
+                        url.status = "Changed"
+                        send_email("Website Changed", f"{url.address} has changed.")
+                        send_telegram(f"🔔 {url.address} has changed.")
+                    else:
+                        url.status = "Unchanged"
+
+                    url.last_checked = datetime.utcnow()
+                    db.session.commit()
+                except Exception as e:
+                    url.status = "Error"
+                    db.session.commit()
+                    print(f"Error checking {url.address}: {e}")
             time.sleep(60)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        url = request.form['url']
-        if url:
-            new_url = URL(address=url, last_checked=None, status=None)
+        address = request.form['address']
+        interval = int(request.form['interval'])
+        if address:
+            new_url = URL(address=address, interval=interval)
             db.session.add(new_url)
             db.session.commit()
         return redirect('/')
